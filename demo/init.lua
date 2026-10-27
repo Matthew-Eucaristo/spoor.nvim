@@ -40,7 +40,3 @@ require("lazy").setup({
   change_detection = { enabled = false },
   rocks = { enabled = false },
 })
-
-if os.getenv("SPOOR_DEMO_TOUR") then
-  dofile(repo .. "/demo/tour.lua")
-end

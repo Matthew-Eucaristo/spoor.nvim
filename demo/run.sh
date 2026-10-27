@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Throwaway LazyVim with spoor.nvim from this checkout. Nothing outside .tests/demo is written.
-#   demo/run.sh [file]            open a file in the demo shop repo
-#   SPOOR_DEMO_TOUR=1 demo/run.sh  play the scripted tour (used for the README hero)
+#   demo/run.sh [file]   open a file in the demo shop repo (demo/demo.tape records the README GIF)
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 state="$repo/.tests/demo"
