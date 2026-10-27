@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 - 2026-10-27
 
 - Out of the way by default: nothing shows while you move. `K` shows the full bow-tie next to the hover at once (also before any card); resting the cursor on a function for `live.card.delay` (5 s) shows the small card. `live.hover = false` and `card = { delay = false }` turn them off.
 - `<leader>uB` now toggles a bottom panel (`live.panel`, off at first; `live.layout = "bottom"` or `"float"`). It replaces the old on/off for the live view, and its state is saved under a new key, so an old "on" doesn't turn the panel on.
