@@ -4,7 +4,7 @@ export XDG_STATE_HOME := $(CURDIR)/.tests/state
 export XDG_DATA_HOME := $(CURDIR)/.tests/data
 export XDG_CACHE_HOME := $(CURDIR)/.tests/cache
 
-.PHONY: test e2e lint format clean
+.PHONY: test e2e smoke lint format clean
 
 test: $(DEPS)
 	$(NVIM) --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run({ collect = { find_files = function() return vim.fn.globpath('tests', 'test_*.lua', true, true) end } })"
@@ -13,11 +13,15 @@ test: $(DEPS)
 e2e: $(DEPS)
 	$(NVIM) --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run({ collect = { find_files = function() return vim.fn.globpath('tests/e2e', 'test_*.lua', true, true) end } })"
 
+# spoor in real configs (minimal, plain lazy.nvim, stock LazyVim) on $(NVIM)
+smoke: $(DEPS)
+	for c in minimal lazy lazyvim; do NVIM=$(NVIM) tests/smoke/run.sh $$c || exit 1; done
+
 lint:
-	stylua --check lua plugin tests bench
+	stylua --check lua plugin tests bench lazy.lua
 
 format:
-	stylua lua plugin tests bench
+	stylua lua plugin tests bench lazy.lua
 
 $(DEPS): $(DEPS)/mini.nvim $(DEPS)/snacks.nvim
 

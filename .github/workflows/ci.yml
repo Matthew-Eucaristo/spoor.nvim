@@ -2,9 +2,13 @@ name: ci
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -14,7 +18,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: 2.3.1
-          args: --check lua plugin tests bench demo/init.lua
+          args: --check lua plugin tests bench demo/init.lua lazy.lua
 
   test:
     strategy:
@@ -34,15 +38,38 @@ jobs:
           version: ${{ matrix.nvim }}
       - run: make test
 
+  smoke:
+    # spoor in real configs: no plugin manager, plain lazy.nvim, stock LazyVim
+    strategy:
+      fail-fast: false
+      matrix:
+        nvim: [stable, nightly, v0.11.7]
+        config: [minimal, lazy, lazyvim]
+    runs-on: ubuntu-latest
+    # upstream plugins may break on nightly; that must not block spoor's own checks
+    continue-on-error: ${{ matrix.nvim == 'nightly' && matrix.config != 'minimal' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1.6.1
+        with:
+          neovim: true
+          version: ${{ matrix.nvim }}
+      - run: make deps
+      - run: tests/smoke/run.sh ${{ matrix.config }}
+
   e2e:
     # real language servers on tests/fixtures
+    strategy:
+      fail-fast: false
+      matrix:
+        nvim: [stable, nightly]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1.6.1
         with:
           neovim: true
-          version: stable
+          version: ${{ matrix.nvim }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: stable
