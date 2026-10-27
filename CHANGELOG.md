@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 - 2026-10-28
 
 - Tree-sitter fallback: callers and references now come from the whole project, not just the file. With a server that has find-references (lua_ls), spoor asks it; otherwise it runs `git grep` for the name in files of the same language. Each use is grouped by the function around it and shown as a call or a reference, and the footer says where callers came from (`syntax · lua_ls references`, `syntax · name search`).
 
