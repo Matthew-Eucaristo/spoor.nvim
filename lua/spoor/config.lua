@@ -7,15 +7,17 @@ M.defaults = {
   live = {
     enabled = true, -- first-run default; the <leader>uB toggle persists your choice
     debounce = 120, -- ms the cursor must rest before spoor asks the language server
-    layout = "bottom", -- "bottom" (split panel) or "float" (corner, never focused)
-    height = 8, -- panel rows, header included
-    max_items = 6, -- rows per side before "+N more"
+    layout = "peek", -- "peek" (small card in the top-right corner), "bottom" (split panel) or "float"
+    height = 8, -- bottom panel rows, header included
+    max_items = 6, -- bottom panel: rows per side before "+N more"
+    peek = { width = 64, max_items = 4 }, -- the corner card; gag opens the full float
   },
   -- The on-demand float (gag) with deeper levels.
   float = {
     width = 0.86,
     depth = 2, -- levels per side opened up front (1 = neighbours only)
     max_items = 12, -- rows per side per level before "+N more"
+    preview = true, -- show the node under the cursor in the code window; <CR> stays, <Esc> returns
   },
   timeout = 1500, -- hard per-request timeout in ms
   cold_timeout = 15000, -- for a server's first answer, while it is still indexing

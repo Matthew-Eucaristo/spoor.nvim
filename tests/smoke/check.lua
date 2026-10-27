@@ -84,9 +84,11 @@ local ok, err = xpcall(function()
     local v = live.panels[vim.api.nvim_get_current_tabpage()]
     return v and v:valid() and table.concat(vim.api.nvim_buf_get_lines(v.win.buf, 0, -1, false), "\n") or ""
   end
-  wait(function()
-    return panel_text():find("handleOrders", 1, true) and panel_text():find("Emit", 1, true)
-  end, 5000, "live panel")
+  local function shown()
+    local v = live.panels[vim.api.nvim_get_current_tabpage()]
+    return v and v:valid() and v.graph and v.graph.complete and panel_text():find("handleOrders", 1, true) ~= nil
+  end
+  wait(shown, 5000, "live panel")
 
   -- gag float
   vim.api.nvim_set_current_win(code_win)
@@ -168,14 +170,10 @@ local ok, err = xpcall(function()
   -- leave only the code window and the live panel, then quit once
   vim.api.nvim_set_current_win(code_win)
   vim.api.nvim_exec_autocmds("CursorMoved", {})
-  wait(function()
-    return panel_text():find("Emit", 1, true)
-  end, 5000, "panel before :q")
+  wait(shown, 5000, "panel before :q")
   vim.cmd("silent! only")
   vim.api.nvim_exec_autocmds("CursorMoved", {})
-  wait(function()
-    return panel_text():find("Emit", 1, true)
-  end, 5000, "panel after :only")
+  wait(shown, 5000, "panel after :only")
 end, debug.traceback)
 if not ok then
   fail(err)

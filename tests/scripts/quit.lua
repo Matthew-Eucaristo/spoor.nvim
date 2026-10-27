@@ -7,7 +7,7 @@ local p = w.process.selectionRange.start
 local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
 H.fake_server(bufnr, { handlers = H.go_handlers(w) })
 local code = vim.api.nvim_get_current_win()
-require("spoor").setup({ live = { enabled = true, debounce = 10 } })
+require("spoor").setup({ live = { enabled = true, debounce = 10, layout = os.getenv("LAYOUT") or "peek" } })
 require("spoor").toggle(true)
 vim.api.nvim_exec_autocmds("CursorMoved", {})
 H.wait(function()

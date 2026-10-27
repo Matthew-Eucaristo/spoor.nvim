@@ -35,4 +35,4 @@ Tests run headless with [mini.test](https://github.com/nvim-mini/mini.nvim). LSP
 
 ## Recording the demo
 
-`vhs demo/demo.tape` re-records `demo/demo.gif` from the repository root. The tape runs `demo/run.sh` (a throwaway LazyVim on the synthetic shop repo from `demo/setup.sh`) under a temporary `HOME` (`demo/vhs-env.sh`), so no frame shows anything about your machine. It needs [VHS](https://github.com/charmbracelet/vhs), gopls and JetBrainsMono Nerd Font (`brew install --cask font-jetbrains-mono-nerd-font`). Check every frame before committing a new GIF, and keep it under about 1 MB.
+`vhs demo/demo.tape` re-records `demo/demo.gif` from the repository root. The tape runs `demo/run.sh` (a throwaway LazyVim on the synthetic shop repo from `demo/setup.sh`) under a temporary `HOME` (`demo/vhs-env.sh`), so no frame shows anything about your machine. It needs [VHS](https://github.com/charmbracelet/vhs), gopls and JetBrainsMono Nerd Font (`brew install --cask font-jetbrains-mono-nerd-font`). Check every frame before committing a new GIF, and keep it under about 2 MB.

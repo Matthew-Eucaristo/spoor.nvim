@@ -6,7 +6,7 @@ Follow the trail through a codebase without leaving LazyVim. spoor shows who cal
 
 A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the same way: pick a focus, look at its neighbours, follow one path, and write down what they learn. The slow part is not following calls but losing the trail. spoor makes that cheap:
 
-- **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. It follows the cursor in a small panel at the bottom, and `gag` opens a float two levels deep.
+- **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. A small card in the top-right corner follows the cursor; it never takes focus, moves out of the cursor's way and hides while you type. `gag` opens the full bow-tie two levels deep: moving through it shows each function's code above, `<CR>` goes there and `<Esc>` puts you back. `<C-v>`, `<C-s>` or `<C-t>` keep it open in a split or a tab of its own.
 - **Trace mode.** `gat` walks one hop at a time while the code opens beside you. Add notes as you go and resume the trail tomorrow with `<leader>ct`.
 - **What did the agent change?** `<leader>cG` lists the functions touched since the branch point, each with its bow-tie. A new function with no callers is flagged, because that is often the first sign an agent went off track.
 - **Entry points.** `<leader>ce` finds `main` functions, HTTP routes, Next.js pages and route handlers, Flutter `main → runApp`, and package scripts. Picking one starts a trace there.
@@ -64,19 +64,20 @@ Every key below was checked against LazyVim 16, its language extras (including J
 | `<leader>ce` | Open the entry-points picker |
 | `<leader>cG` | List changed symbols since the branch point (`:Spoor changes <ref>` picks another ref) |
 
-In the bow-tie (panel or float):
+In the bow-tie (the `gag` float, a pinned split, or the bottom panel). Moving the cursor onto a node shows its code in the code window; `<Esc>` in the float puts that window back.
 
 | Key | What it does |
 |---|---|
-| `<CR>` | Jump to the node under the cursor |
+| `<CR>` | Go to the node under the cursor (the float closes; a pinned split stays) |
 | `h` / `l` | Move to the callers or the callees column |
 | `<Tab>` | Open one more level from the node, or fold it again. In the panel, this opens the float. |
-| `.` / `<BS>` | Re-root on the node, or go back (float) |
+| `.` / `<BS>` | Re-root on the node, or go back |
+| `<C-v>` / `<C-s>` / `<C-t>` | Float: keep it open in a vertical split, a bottom split or a new tab |
 | `t` | Start a trace at the node |
 | `H` | Show or hide external, generated and test code |
 | `R` | Retry, or find callers on servers where live mode skips them |
 | `y` | Copy the bow-tie as Mermaid |
-| `q` | Close the float. In the panel, `q` turns live mode off and `:q` pauses it for this session. |
+| `q` | Close. In the bottom panel, `q` turns live mode off and `:q` pauses it for this session. |
 | `g?` | Show help |
 
 In trace mode:
@@ -139,11 +140,17 @@ These are the defaults. Pass only what you want to change in `opts`.
   live = {
     enabled = true, -- first-run default; <leader>uB remembers your choice
     debounce = 120, -- ms the cursor must rest
-    layout = "bottom", -- "bottom" panel or "float" in the corner
-    height = 8,
-    max_items = 6, -- rows per side before "+N more"
+    layout = "peek", -- "peek" card in the top-right corner, "bottom" panel, or "float"
+    height = 8, -- bottom panel
+    max_items = 6, -- bottom panel: rows per side before "+N more"
+    peek = { width = 64, max_items = 4 },
   },
-  float = { width = 0.86, depth = 2, max_items = 12 },
+  float = {
+    width = 0.86,
+    depth = 2,
+    max_items = 12,
+    preview = true, -- moving through gag shows each node's code; <Esc> goes back
+  },
   timeout = 1500, -- per request, ms
   cold_timeout = 15000, -- while a server is still indexing
   max_nodes = 60,

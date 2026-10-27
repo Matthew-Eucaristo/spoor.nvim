@@ -80,6 +80,18 @@ function M.close_all()
   end
 end
 
+--- The corner card has nothing to say right now (insert mode, no function, another window).
+local function hide_peek()
+  local tab = vim.api.nvim_get_current_tabpage()
+  local v = M.panels[tab]
+  if v and v.opts.kind == "peek" then
+    v.closing = true
+    v:close()
+    M.panels[tab] = nil
+  end
+end
+M.hide_peek = hide_peek
+
 ---@param v spoor.View
 local function own_panel(win)
   for _, v in pairs(M.panels) do
@@ -147,30 +159,53 @@ local function panel()
   local o = Config.options.live
   local float = o.layout == "float"
   local width = math.min(math.floor(vim.o.columns * 0.62), 140)
-  v = view.new({
-    kind = "panel",
-    max_items = o.max_items,
-    max_rows = o.height - 1,
-    actions = M.actions,
-    keys = M.keys,
-    win = float and {
-      position = "float",
-      relative = "editor",
-      width = width,
-      height = o.height,
-      row = vim.o.lines - o.height - 4,
-      col = vim.o.columns - width - 2,
-      border = "rounded",
-      backdrop = false,
-      focusable = true,
-      zindex = 20,
-    } or {
-      position = "bottom",
-      height = o.height,
-      relative = "editor",
-      wo = { winfixheight = true, winbar = " " },
-    },
-  })
+  if o.layout == "peek" then
+    local w = math.min(o.peek.width, vim.o.columns - 4)
+    v = view.new({
+      kind = "peek",
+      max_items = o.peek.max_items,
+      actions = M.actions,
+      keys = {},
+      win = {
+        position = "float",
+        relative = "editor",
+        width = w,
+        height = 4,
+        row = 1,
+        col = vim.o.columns - w - 3,
+        border = "rounded",
+        backdrop = false,
+        focusable = false,
+        zindex = 20, -- below notifications and completion menus
+        wo = { cursorline = false },
+      },
+    })
+  else
+    v = view.new({
+      kind = "panel",
+      max_items = o.max_items,
+      max_rows = o.height - 1,
+      actions = M.actions,
+      keys = M.keys,
+      win = float and {
+        position = "float",
+        relative = "editor",
+        width = width,
+        height = o.height,
+        row = vim.o.lines - o.height - 4,
+        col = vim.o.columns - width - 2,
+        border = "rounded",
+        backdrop = false,
+        focusable = true,
+        zindex = 20,
+      } or {
+        position = "bottom",
+        height = o.height,
+        relative = "editor",
+        wo = { winfixheight = true, winbar = " " },
+      },
+    })
+  end
   v.origin = vim.api.nvim_get_current_win()
   v:show()
   v.win:on("WinClosed", function()
@@ -200,7 +235,7 @@ function M.update()
   end
   local win = vim.api.nvim_get_current_win()
   if not followable(win) then
-    return
+    return hide_peek()
   end
   local bufnr = vim.api.nvim_win_get_buf(win)
   local client = lsp.client(bufnr)
@@ -209,7 +244,7 @@ function M.update()
     if existing and existing:valid() then
       existing:set_stale(true)
     end
-    return
+    return hide_peek()
   end
   if M.group then
     M.group:cancel()
@@ -232,10 +267,14 @@ function M.update()
       if v and v:valid() then
         v:set_stale(true)
       end
-      return
+      return hide_peek()
     end
     local key = key_for(item)
     if v and v:valid() and v.key == key then
+      if v.opts.kind == "peek" then
+        v.origin = win
+        v:place_peek() -- keep it out of the cursor's way
+      end
       return v:set_stale(false)
     end
     v = panel()
@@ -284,6 +323,7 @@ function M.setup()
       for _, g in ipairs({ M.group, bowtie.open_group, require("spoor.trace").start_group }) do
         g:cancel()
       end
+      hide_peek()
     end,
   })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufWritePost" }, {

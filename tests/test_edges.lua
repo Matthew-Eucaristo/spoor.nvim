@@ -38,7 +38,7 @@ local function go_buffer(opts)
 end
 
 local function setup(config)
-  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10 } }, config or {}))
+  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10, layout = "bottom" } }, config or {}))
 end
 
 local function move()

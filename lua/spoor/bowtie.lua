@@ -38,8 +38,9 @@ function M.load(v, client, item, opts)
     group = v.group,
     callers = opts.callers,
   }, function(updated)
-    if v.graph == updated then
-      v:render(updated)
+    local target = v.moved_to or v -- the float may have been moved to a split or tab
+    if target.graph == updated then
+      target:render(updated)
     end
     if opts.on_done and updated.status.incoming ~= "loading" and updated.status.outgoing ~= "loading" then
       opts.on_done(updated)
@@ -85,15 +86,154 @@ function M.expand(v)
   end)
 end
 
+local preview_ns = vim.api.nvim_create_namespace("spoor_preview")
+
+--- Show the node under the cursor in the code window without leaving the view. The first
+--- preview remembers what the code window showed, so closing the float can put it back.
+---@param v spoor.View
+function M.preview(v)
+  if not (Config.options.float.preview and v:valid()) then
+    return
+  end
+  local node = v:node_at_cursor()
+  local win = v.origin
+  if not (node and vim.api.nvim_win_is_valid(win)) or (v.preview and v.preview.shown == node.id) then
+    return
+  end
+  if node.uri:find("^file:") and not vim.uv.fs_stat(vim.uri_to_fname(node.uri)) then
+    return
+  end
+  local p = v.preview
+  if not p then
+    p = {
+      buf = vim.api.nvim_win_get_buf(win),
+      view = vim.api.nvim_win_call(win, vim.fn.winsaveview),
+      opened = {},
+    }
+    v.preview = p
+  end
+  p.shown = node.id
+  local buf = vim.uri_to_bufnr(node.uri)
+  if not vim.api.nvim_buf_is_loaded(buf) then
+    p.opened[buf] = true -- unlisted until you jump there; wiped again on close
+    pcall(vim.fn.bufload, buf)
+  end
+  local line = node.selection.start.line
+  local text = vim.api.nvim_buf_get_lines(buf, line, line + 1, false)[1] or ""
+  local col = util.byte_col(text, node.selection.start.character, v.graph and v.graph.encoding)
+  vim.api.nvim_win_call(win, function()
+    vim.api.nvim_win_set_buf(win, buf)
+    pcall(vim.api.nvim_win_set_cursor, win, { line + 1, col })
+    vim.fn.winrestview({ topline = math.max(line - 2, 1) }) -- near the top: the float sits below
+  end)
+  if p.hl_buf and vim.api.nvim_buf_is_valid(p.hl_buf) then
+    vim.api.nvim_buf_clear_namespace(p.hl_buf, preview_ns, 0, -1)
+  end
+  pcall(vim.api.nvim_buf_set_extmark, buf, preview_ns, line, 0, { line_hl_group = "SpoorPreview" })
+  p.hl_buf = buf
+end
+
+--- End previews: put the code window back (unless `keep`) and wipe buffers opened only to preview.
+---@param v spoor.View
+---@param keep? boolean
+function M.finish_preview(v, keep)
+  local p = v.preview
+  if not p then
+    return
+  end
+  v.preview = nil
+  if p.hl_buf and vim.api.nvim_buf_is_valid(p.hl_buf) then
+    vim.api.nvim_buf_clear_namespace(p.hl_buf, preview_ns, 0, -1)
+  end
+  local win = v.origin
+  if not keep and vim.api.nvim_win_is_valid(win) and vim.api.nvim_buf_is_valid(p.buf) then
+    vim.api.nvim_win_call(win, function()
+      vim.api.nvim_win_set_buf(win, p.buf)
+      vim.fn.winrestview(p.view)
+    end)
+  end
+  local shown = vim.api.nvim_win_is_valid(win) and vim.api.nvim_win_get_buf(win) or nil
+  if keep and shown then
+    vim.bo[shown].buflisted = true
+  end
+  for buf in pairs(p.opened) do
+    if
+      buf ~= shown
+      and vim.api.nvim_buf_is_valid(buf)
+      and not vim.bo[buf].modified
+      and #vim.fn.win_findbuf(buf) == 0
+    then
+      pcall(vim.api.nvim_buf_delete, buf, {})
+    end
+  end
+end
+
+--- Wire previews into a float or pinned view.
+---@param v spoor.View
+local function follow(v)
+  v.win:on("CursorMoved", function()
+    M.preview(v)
+  end, { buf = true })
+  v.win:on("WinClosed", function()
+    M.finish_preview(v, v.keep)
+  end, { win = true })
+end
+
+--- Move the float to a split or a tab (<C-v>, <C-s>, <C-t>). It keeps its graph, history and keys,
+--- and <CR> no longer closes it.
+---@param how "right"|"bottom"|"tab"
+local function pin(how)
+  return function(v)
+    if not v.graph then
+      return
+    end
+    local origin = v.origin
+    v.keep = true
+    v:close()
+    if how == "tab" and vim.api.nvim_win_is_valid(origin) then
+      vim.api.nvim_set_current_win(origin)
+      vim.cmd("tab split")
+      origin = vim.api.nvim_get_current_win()
+    end
+    local win = how == "bottom"
+        and { position = "bottom", height = 0.35, relative = "editor", wo = { winfixheight = true, winbar = " " } }
+      or {
+        position = "right",
+        width = 0.5, -- a bow-tie is wide; less makes names unreadable
+        relative = "editor",
+        wo = { winfixwidth = true, winbar = " " },
+      }
+    win.enter = true
+    local p = view.new({
+      kind = "pinned",
+      max_items = Config.options.float.max_items,
+      actions = M.pinned_actions,
+      keys = M.pinned_keys,
+      win = win,
+    })
+    p.origin, p.client, p.load_opts, p.history, p.group = origin, v.client, v.load_opts, v.history, v.group
+    p.keep = true
+    v.moved_to = p
+    p:show()
+    follow(p)
+    p:render(v.graph)
+    M.pinned = p
+  end
+end
+
 --- Float actions (the live panel overrides a few in live.lua).
 M.float_actions = vim.tbl_extend("force", view.base_actions, {
   jump = function(v)
     local node = v:node_at_cursor()
     if node then
+      v.keep = true
       v:close()
       v:jump(node)
     end
   end,
+  pin_right = pin("right"),
+  pin_bottom = pin("bottom"),
+  pin_tab = pin("tab"),
   expand = M.expand,
   retry = M.retry,
   reroot = function(v)
@@ -120,6 +260,7 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
   trace = function(v)
     local node = v:node_at_cursor() or (v.graph and v.graph.nodes[v.graph.focus])
     if node then
+      v.keep = true
       v:close()
       require("spoor.trace").start(node, { client = v.client, root = v.graph.root })
     end
@@ -133,6 +274,24 @@ M.float_keys = vim.tbl_extend("force", view.keys, {
   ["<BS>"] = { "back", desc = "Previous focus" },
   ["q"] = { "close", desc = "Close" },
   ["<Esc>"] = { "close", desc = "Close" },
+  ["<C-v>"] = { "pin_right", desc = "Move to a vsplit" },
+  ["<C-s>"] = { "pin_bottom", desc = "Move to a split" },
+  ["<C-t>"] = { "pin_tab", desc = "Move to a tab" },
+})
+
+-- A pinned view stays open: <CR> shows the code and moves you there.
+M.pinned_actions = vim.tbl_extend("force", M.float_actions, {
+  jump = function(v)
+    local node = v:node_at_cursor()
+    if node then
+      v:jump(node)
+    end
+  end,
+})
+
+M.pinned_keys = vim.tbl_extend("force", view.keys, {
+  ["<BS>"] = { "back", desc = "Previous focus" },
+  ["q"] = { "close", desc = "Close" },
 })
 
 --- The on-demand float at the cursor (gag).
@@ -176,6 +335,7 @@ function M.open()
     })
     v.origin = win
     v:show()
+    follow(v)
     M.load(v, client, item, { root = root, bufnr = bufnr, depth = Config.for_server(client.name).depth })
     M.current = v
   end)

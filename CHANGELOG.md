@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 - Unreleased
+
+- The live bow-tie is now a small card in the top-right corner by default (`live.layout = "peek"`). It never takes focus, moves out of the cursor's way and hides while you type. `live.layout = "bottom"` brings back the panel.
+- `gag` previews: moving through the bow-tie shows each function's code in the code window; `<CR>` goes there, `<Esc>` puts the window back. Buffers opened only to preview are not listed and are wiped again.
+- `<C-v>`, `<C-s>` and `<C-t>` in the float keep the bow-tie open in a vertical split, a bottom split or a new tab, where `<CR>` goes to the node and the view stays.
+- The float sits at the bottom of the screen so the previewed code stays visible.
+
 ## 1.0.0 - 2026-10-27
 
 First release.

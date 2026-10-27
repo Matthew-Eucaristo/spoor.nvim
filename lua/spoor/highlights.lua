@@ -20,6 +20,7 @@ M.links = {
   SpoorHere = "DiagnosticOk",
   SpoorAdd = "Added",
   SpoorChange = "Changed",
+  SpoorPreview = "Visual", -- the line a float preview points at
 }
 
 function M.setup()

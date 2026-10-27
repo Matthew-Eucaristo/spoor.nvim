@@ -7,7 +7,9 @@ local function start(opts)
   local p = w.process.selectionRange.start
   local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
   local server = H.fake_server(bufnr, { handlers = H.go_handlers(w), delay = opts and opts.delay })
-  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10 } }, opts and opts.config or {}))
+  require("spoor").setup(
+    vim.tbl_deep_extend("force", { live = { debounce = 10, layout = "bottom" } }, opts and opts.config or {})
+  )
   return w, bufnr, server
 end
 

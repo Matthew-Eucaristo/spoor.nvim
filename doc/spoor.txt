@@ -58,8 +58,9 @@ Run |:checkhealth| `spoor` to see what each attached server supports.
 ==============================================================================
 3. LIVE BOW-TIE                                                   *spoor-live*
 
-When the cursor rests on a call or inside a function, a panel at the bottom
-shows: >
+When the cursor rests on a call or inside a function, a card in the top-right
+corner shows the bow-tie (with `live.layout = "bottom"`, a panel at the
+bottom): >
     CALLERS 2                                       CALLEES 5
     handleOrders  server.go:32 ──╮             ╭─▶ validate
     TestProcess  order_test.go ──┤             ├─▶ applyDiscount
@@ -70,15 +71,17 @@ shows: >
 On a call, the focus is the called function. Anywhere else in a body, it is
 the enclosing function. Requests are debounced (`live.debounce`), stale ones
 are cancelled, finished bow-ties are cached until you edit or save, and
-nothing is sent in insert mode.
+nothing is sent in insert mode. The card never takes focus, moves to the
+bottom corner when it would cover the cursor, and hides while you type or when
+the cursor is not in a function. Use |spoor-gag| to interact with it.
 
 <leader>uB          Toggle the live bow-tie. The choice persists across
                     sessions. `:q` in the panel pauses it for this session;
                     `:only` or `:tabclose` just close it until the cursor
                     rests again.
 
-Panel keys: <CR> jump, h / l columns, <Tab> open the float on the node,
-t trace from the node, H show hidden, R retry, y copy as Mermaid,
+Bottom panel keys: <CR> jump, h / l columns, <Tab> open the float on the
+node, t trace from the node, H show hidden, R retry, y copy as Mermaid,
 q turn live off, g? help.
 
 ==============================================================================
@@ -87,9 +90,14 @@ q turn live off, g? help.
 gag                 Open a focused float at the cursor with `float.depth`
                     levels per side (callers of callers, callees of callees).
 
-Float keys: <CR> jump and close, <Tab> open or fold one more level on the
-node, . re-root on the node, <BS> back to the previous root, t trace,
-H show hidden, R retry, y copy as Mermaid, q / <Esc> close, g? help.
+Moving the cursor onto a node shows its code in the code window behind the
+float (`float.preview`); <Esc> or q puts that window back as it was.
+
+Float keys: <CR> go to the node and close, <Tab> open or fold one more level
+on the node, . re-root on the node, <BS> back to the previous root, t trace,
+H show hidden, R retry, y copy as Mermaid, q / <Esc> close, g? help,
+<C-v> / <C-s> / <C-t> keep the bow-tie open in a vertical split, a bottom
+split or a new tab. There <CR> goes to the node and the split stays; q closes.
 
 ==============================================================================
 5. TRACE MODE                                          *spoor-trace* *spoor-gat*
@@ -179,9 +187,10 @@ value references so you can see where it is registered.
 Pass a table to `require("spoor").setup()` (`opts` in lazy.nvim). Defaults:
 >lua
     {
-      live = { enabled = true, debounce = 120, layout = "bottom",
-               height = 8, max_items = 6 },
-      float = { width = 0.86, depth = 2, max_items = 12 },
+      live = { enabled = true, debounce = 120, layout = "peek",
+               height = 8, max_items = 6,
+               peek = { width = 64, max_items = 4 } },
+      float = { width = 0.86, depth = 2, max_items = 12, preview = true },
       timeout = 1500,        -- per request, ms
       cold_timeout = 15000,  -- while a server is still indexing
       max_nodes = 60,

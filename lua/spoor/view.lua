@@ -23,11 +23,12 @@ M.ns = ns
 ---@field key? string live: cache key of the focus shown
 ---@field closing? boolean closed by spoor, not by hand
 ---@field user_quit? boolean live: :q was typed in the panel
+---@field preview? {buf: integer, view: table, opened: table<integer, boolean>, shown?: string} float: the code window before previews
 local View = {}
 View.__index = View
 
 ---@class spoor.ViewOpts
----@field kind "panel"|"float"
+---@field kind "panel"|"float"|"peek"|"pinned" panel/peek: live; float: gag; pinned: a split or tab you moved the float to
 ---@field win snacks.win.Config|{}
 ---@field max_items integer
 ---@field max_rows? integer
@@ -111,8 +112,13 @@ function View:render(g)
     vim.api.nvim_buf_set_extmark(buf, ns, h.row, h.col, { end_col = h.end_col, hl_group = h.group })
   end
   self:decorate(r)
-  if self.opts.kind == "float" then
-    self:fit(#r.lines)
+  if self.opts.kind == "peek" then
+    return self:place_peek(#r.lines)
+  end
+  if self.opts.kind == "float" or self.opts.kind == "pinned" then
+    if self.opts.kind == "float" then
+      self:fit(#r.lines)
+    end
     -- follow the focus row as rows arrive, until you move the cursor yourself
     local cur = vim.api.nvim_win_get_cursor(self.win.win)
     if not self.placed or (cur[1] == self.placed[1] and cur[2] == self.placed[2]) then
@@ -136,30 +142,69 @@ function View:fit(n)
   if not self:valid() then
     return
   end
-  local h = math.max(math.min(n, math.floor(vim.o.lines * 0.8)), 4)
+  local h = math.max(math.min(n, math.floor(vim.o.lines * 0.6)), 4)
   local cfg = vim.api.nvim_win_get_config(self.win.win)
-  if cfg.height ~= h then
+  -- sit low, so the code a preview shows stays visible above
+  local row = math.max(vim.o.lines - h - vim.o.cmdheight - 4, 0)
+  if cfg.height ~= h or cfg.row ~= row then
     vim.api.nvim_win_set_config(self.win.win, {
       relative = "editor",
       height = h,
       width = cfg.width,
-      row = math.floor((vim.o.lines - h) / 2) - 1,
+      row = row,
       col = cfg.col,
     })
   end
 end
 
---- Title/footer (float) or winbar (panel).
+--- Size the corner card to its content: top-right, or bottom-right when it would cover the cursor.
+---@param n? integer lines
+function View:place_peek(n)
+  if not self:valid() then
+    return
+  end
+  n = n or (self.rendered and #self.rendered.lines) or 4
+  local cfg = vim.api.nvim_win_get_config(self.win.win)
+  local h = math.max(math.min(n, math.floor(vim.o.lines * 0.4)), 3)
+  local w = math.min(Config.options.live.peek.width, vim.o.columns - 4)
+  local col = vim.o.columns - w - 3
+  local row = 1
+  local origin = self.origin
+  if vim.api.nvim_win_is_valid(origin) then
+    local pos = vim.api.nvim_win_call(origin, function()
+      return vim.fn.screenpos(0, vim.fn.line("."), vim.fn.col("."))
+    end)
+    if pos.row > 0 and pos.row <= row + h + 2 and pos.col >= col then
+      row = math.max(vim.o.lines - h - vim.o.cmdheight - 4, 1)
+    end
+  end
+  if cfg.height ~= h or cfg.width ~= w or cfg.row ~= row or cfg.col ~= col then
+    vim.api.nvim_win_set_config(self.win.win, { relative = "editor", row = row, col = col, width = w, height = h })
+  end
+end
+
+--- Title/footer (float, peek) or winbar (panel, pinned).
 ---@param r spoor.Rendered
 function View:decorate(r)
   if not self:valid() then
     return
   end
   local legend = r.legend
-  if self.opts.kind == "panel" then
-    local parts = { "%#SpoorHeader# spoor %*" .. (self.stale and "%#SpoorDim#(paused) %*" or "") .. "%<" }
-    for _, chunk in ipairs(legend) do
-      parts[#parts + 1] = ("%%#%s#%s%%*"):format(chunk[2], chunk[1]:gsub("%%", "%%%%"))
+  if self.opts.kind == "panel" or self.opts.kind == "pinned" then
+    local label = self.opts.kind == "pinned" and (" spoor · " .. self.graph.nodes[self.graph.focus].name .. " ")
+      or " spoor "
+    local parts = {
+      "%#SpoorHeader#" .. label:gsub("%%", "%%%%") .. "%*" .. (self.stale and "%#SpoorDim#(paused) %*" or "") .. "%<",
+    }
+    -- the legend only when it fits; a cut legend reads as nonsense
+    local room = self:width() - vim.api.nvim_strwidth(label) - 2
+    local text = table.concat(vim.tbl_map(function(c)
+      return c[1]
+    end, legend))
+    if vim.api.nvim_strwidth(text) <= room then
+      for _, chunk in ipairs(legend) do
+        parts[#parts + 1] = ("%%#%s#%s%%*"):format(chunk[2], chunk[1]:gsub("%%", "%%%%"))
+      end
     end
     if self:width() >= 110 then
       parts[#parts + 1] = "%=%#SpoorDim#<CR> jump  t trace  H hidden  g? help %*"
@@ -167,10 +212,19 @@ function View:decorate(r)
     vim.wo[self.win.win].winbar = table.concat(parts)
   else
     local focus = self.graph.nodes[self.graph.focus]
+    local footer = legend
+    if self.opts.kind == "peek" then
+      -- the card is a glance; say where the rest is
+      footer = {
+        { " " .. (self.graph.server or "lsp") .. " · ", "SpoorDim" },
+        { "gag", "SpoorKey" },
+        { " for more ", "SpoorDim" },
+      }
+    end
     vim.api.nvim_win_set_config(self.win.win, {
       title = { { " spoor ", "SpoorHeader" }, { "· " .. focus.name .. " ", "SpoorFocus" } },
       title_pos = "center",
-      footer = legend,
+      footer = footer,
       footer_pos = "center",
     })
   end
