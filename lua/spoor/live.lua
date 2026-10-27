@@ -103,10 +103,16 @@ local function own_panel(win)
 end
 
 --- Is a hover, signature or diagnostic float open at the cursor? The card steps aside for it.
-local function cursor_float()
+--- Neovim reports a cursor float as relative to the window the cursor is in, so: a focusable
+--- float anchored to the code window. Sidebars (the snacks explorer) anchor to their own window,
+--- and decorations like treesitter-context aren't focusable; neither counts.
+---@param win? integer the code window
+local function cursor_float(win)
+  win = win or vim.api.nvim_get_current_win()
   for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local rel = vim.api.nvim_win_get_config(w).relative
-    if (rel == "cursor" or rel == "win") and not own_panel(w) then
+    local cfg = vim.api.nvim_win_get_config(w)
+    local anchored = cfg.relative == "cursor" or (cfg.relative == "win" and (cfg.bufpos ~= nil or cfg.win == win))
+    if anchored and cfg.focusable ~= false and not own_panel(w) then
       return true
     end
   end
@@ -280,7 +286,7 @@ function M.update()
       end
       return hide_card()
     end
-    if Config.options.live.layout == "cursor" and cursor_float() then
+    if Config.options.live.layout == "cursor" and cursor_float(win) then
       return hide_card()
     end
     local key = key_for(item)

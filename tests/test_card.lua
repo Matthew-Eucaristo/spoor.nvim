@@ -109,6 +109,25 @@ T["the card steps aside for a hover float and comes back"] = function()
   end, 3000, "card back")
 end
 
+T["a sidebar anchored to a window (snacks explorer) does not hide the card"] = function()
+  start()
+  local code = vim.api.nvim_get_current_win()
+  vim.cmd("normal! zz")
+  wait_card()
+  vim.cmd("topleft vsplit")
+  local side = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_width(side, 20)
+  local buf = vim.api.nvim_create_buf(false, true)
+  local float =
+    vim.api.nvim_open_win(buf, false, { relative = "win", win = side, row = 0, col = 0, width = 18, height = 3 })
+  vim.api.nvim_set_current_win(code)
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  vim.wait(300)
+  local v = card()
+  eq(v ~= nil and v.graph ~= nil, true)
+  vim.api.nvim_win_close(float, true)
+end
+
 T["the card hides while typing and where there is no function"] = function()
   start()
   wait_card()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1 - 2026-10-27
+
+- Fix: the cursor card stayed hidden while a sidebar such as the snacks explorer was open. Only floats anchored to the cursor (hover, signature, diagnostics) make it step aside now.
+
 ## 1.1.0 - 2026-10-27
 
 - The live bow-tie is now a card next to the cursor by default, like an always-on hover (`live.layout = "cursor"`). It sits above the cursor line (below near the top), never takes focus, steps aside for hover, signature and diagnostic floats, and hides while you type. `live.layout = "bottom"` brings back the panel.
