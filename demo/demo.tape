@@ -52,8 +52,11 @@ Type "gag" Sleep 1.5s
 Ctrl+V Sleep 2s
 Type "ljj" Sleep 1.5s
 Enter Sleep 1.8s
+Hide
 Type ":only | edit internal/order/order.go" Enter Sleep 800ms
-Type "25Gw" Sleep 1.5s
+Type "25Gw" Sleep 500ms
+Show
+Sleep 1s
 
 # gat: walk one hop at a time, pick the implementation, leave a note.
 Type "gat" Sleep 2.5s

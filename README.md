@@ -2,7 +2,7 @@
 
 Follow the trail through a codebase without leaving Neovim. spoor shows who calls the function under your cursor and what it calls, keeps the path you walked with your notes, and tells you which functions your coding agent just added that nothing calls yet. It uses your language server and git, falls back to tree-sitter where there is no call hierarchy, and needs no AI and no index to build. It works in plain Neovim and in LazyVim alike.
 
-![spoor: the live bow-tie, the deeper float, a trace with a note, and the changed-symbols picker](demo/demo.gif)
+![spoor: K shows the bow-tie next to the hover, a rest shows the card, <leader>uB the bottom panel, then the deeper float, a trace with a note, and the changed-symbols picker](demo/demo.gif)
 
 A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the same way: pick a focus, look at its neighbours, follow one path, and write down what they learn. The slow part is not following calls but losing the trail. spoor makes that cheap:
 
@@ -45,7 +45,7 @@ require("spoor").setup()
 
 ### Any other way
 
-Put spoor (and snacks.nvim, if you want it) on your `runtimepath` (for example, `git clone` into `~/.local/share/nvim/site/pack/plugins/start/`), run `:helptags ALL` once so `:h spoor` works, and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys and no live panel.
+Put spoor (and snacks.nvim, if you want it) on your `runtimepath` (for example, `git clone` into `~/.local/share/nvim/site/pack/plugins/start/`), run `:helptags ALL` once so `:h spoor` works, and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys, no `K` bow-tie, no card and no panel.
 
 ### Why not Homebrew?
 
@@ -77,9 +77,9 @@ In the bow-tie (the `gag` float, a pinned split, or the bottom panel). Moving th
 | `<C-v>` / `<C-s>` / `<C-t>` | Float: keep it open in a vertical split, a bottom split or a new tab |
 | `t` | Start a trace at the node |
 | `H` | Show or hide external, generated and test code |
-| `R` | Retry, or find callers on servers where live mode skips them |
+| `R` | Retry, or find callers on servers where the card and panel skip them |
 | `y` | Copy the bow-tie as Mermaid |
-| `q` | Close. In the bottom panel, `q` turns live mode off and `:q` pauses it for this session. |
+| `q` | Close. In the bottom panel, `q` turns the panel off and `:q` pauses it for this session. |
 | `g?` | Show help |
 
 In trace mode:
@@ -174,7 +174,7 @@ spoor makes three requests per bow-tie (prepare, incoming calls, outgoing calls)
 
 The tree-sitter fallback parses asynchronously and indexes a buffer once per edit. On a generated 5,000-line Lua file the first bow-tie takes 16 ms (parse included), later ones 0.5 ms, and one after an edit 6.5 ms; on a real 3,800-line file, 32 ms, 0.7 ms and 9 ms (`nvim --clean -l bench/syntax.lua`, Neovim 0.11.7 and 0.12.6 on an Apple M-series laptop).
 
-dartls answers "who calls this?" with a workspace-wide search that took 14–21 s on a large Flutter app. For dartls, the live panel therefore shows callees immediately and finds callers when you press `R`, with a 20 s limit. `build()` and the other Flutter lifecycle methods never search for callers, because only the framework calls them. You can tune each server under `servers`. Run `bench/callhierarchy.lua` to measure your own projects.
+dartls answers "who calls this?" with a workspace-wide search that took 14–21 s on a large Flutter app. For dartls, the card and panel therefore show callees immediately and finds callers when you press `R`, with a 20 s limit. `build()` and the other Flutter lifecycle methods never search for callers, because only the framework calls them. You can tune each server under `servers`. Run `bench/callhierarchy.lua` to measure your own projects.
 
 ## Configuration
 
@@ -226,7 +226,7 @@ Highlight groups (`SpoorFocus`, `SpoorName`, `SpoorLoc`, `SpoorEdge`, `SpoorInte
 
 spoor writes only to `stdpath("state")/spoor/` (`~/.local/state/nvim/spoor/` by default):
 
-- `state.json` holds whether the live bow-tie is on.
+- `state.json` holds whether the bottom panel is on.
 - `trails/<project>-<hash>.json` holds your trails and notes for each project.
 
 To uninstall with lazy.nvim, delete `lua/plugins/spoor.lua`, run `:Lazy clean`, and delete that folder. spoor never writes to your project, never starts background processes (it only runs short `git` commands), and makes no network requests.

@@ -249,7 +249,7 @@ index is rebuilt once per edit. A server that can answer always wins;
 :Spoor trails        Pick a trail.
 :Spoor entries       Pick an entry point.
 :Spoor changes [ref] Changed symbols since [ref].
-:Spoor live [on|off] Turn the live bow-tie on or off; no argument toggles.
+:Spoor live [on|off] Turn the bottom panel on or off; no argument toggles.
 :Spoor graph         Print the current bow-tie as JSON.
 :Spoor trail         Print the current trail as JSON.
 
@@ -287,7 +287,7 @@ Pass a table to `require("spoor").setup()` (`opts` in lazy.nvim). Defaults:
     }
 <
 `servers.<name>` applies per language server: `timeout`, `depth`, and
-`live_callers = false`, which makes the live panel skip the caller search
+`live_callers = false`, which makes the card and panel skip the caller search
 until you press R. Set a key to false to skip it, or `keys = false` to set no
 global keys.
 
@@ -334,7 +334,7 @@ The `User SpoorTrail` autocommand fires after a trail is saved, with
 13. FILES                                                         *spoor-files*
 
 spoor writes only to `stdpath("state")/spoor/`:
-  state.json                  whether the live bow-tie is on
+  state.json                  whether the bottom panel is on
   trails/<project>-<hash>.json trails and notes for each project
 
 Delete that folder to forget everything. spoor never writes to your project.
