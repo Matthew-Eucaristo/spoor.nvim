@@ -17,25 +17,42 @@ There is no whole-repo graph view. A graph seeded from your cursor, one or two h
 
 ## Install
 
-You need Neovim 0.11 or newer, [snacks.nvim](https://github.com/folke/snacks.nvim) (LazyVim ships it), git, and a language server with call hierarchy. gopls, vtsls, tsgo, dartls, pyright, jdtls, clangd and rust-analyzer all qualify.
+You need Neovim 0.11 or newer, [snacks.nvim](https://github.com/folke/snacks.nvim) (LazyVim ships it), git, and a language server with call hierarchy. gopls, vtsls, tsgo, dartls, pyright, jdtls, clangd and rust-analyzer all qualify. spoor is tested on macOS and Linux.
 
-With [LazyVim](https://lazyvim.org), add one file:
+### LazyVim or lazy.nvim
+
+Add one file:
 
 ```lua
 -- ~/.config/nvim/lua/plugins/spoor.lua
 return {
   "Matthew-Eucaristo/spoor.nvim",
+  version = "*", -- follow releases; drop this line to track main
   event = "VeryLazy",
-  dependencies = { "folke/snacks.nvim" },
   opts = {},
 }
 ```
 
-That's all. Open a code file and rest the cursor on a function. `:checkhealth spoor` shows what your language servers support.
+Restart Neovim and lazy.nvim installs spoor and snacks.nvim (declared in spoor's own `lazy.lua`). Open a code file and rest the cursor on a function. `:checkhealth spoor` shows what your language servers support.
+
+### Neovim 0.12's built-in `vim.pack`
+
+```lua
+vim.pack.add({ "https://github.com/folke/snacks.nvim", "https://github.com/Matthew-Eucaristo/spoor.nvim" })
+require("spoor").setup()
+```
+
+### Any other way
+
+Put spoor and snacks.nvim on your `runtimepath` (for example, `git clone` both into `~/.local/share/nvim/site/pack/plugins/start/`) and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys and no live panel.
+
+### Why not Homebrew?
+
+A plugin is installed by your plugin manager, which also updates it, pins it in `lazy-lock.json` and loads it lazily. A Homebrew formula would be a second update channel that LazyVim can't see: lazy.nvim resets the runtimepath, so a plugin under Homebrew's `share/nvim/site` is not even loaded. If spoor grows a command-line tool, that tool will ship through Homebrew.
 
 ## Keys
 
-Every key below was checked against LazyVim 16 and its language extras, including Java's `<leader>cg` group, and none collide. `gag` and `gat` join LazyVim's `gai`/`gao` in the `ga` "calls" group.
+Every key below was checked against LazyVim 16, its language extras (including Java's `<leader>cg` group), and the fzf and telescope picker extras, and none collide. `gag` and `gat` join LazyVim's `gai`/`gao` in the `ga` "calls" group.
 
 | Key | What it does |
 |---|---|
@@ -73,6 +90,7 @@ In trace mode:
 | `<C-q>` | Send the trail to quickfix, notes included |
 | `m` | Copy the trail as Mermaid |
 | `q` | Close (the trail is already saved) |
+| `g?` | Show help |
 
 All global keys can be changed or turned off: `opts = { keys = { changes = "<leader>gC", trace = false } }`, or `keys = false` to set none.
 
@@ -156,7 +174,7 @@ spoor writes only to `stdpath("state")/spoor/` (`~/.local/state/nvim/spoor/` by 
 - `state.json` holds whether the live bow-tie is on.
 - `trails/<project>-<hash>.json` holds your trails and notes for each project.
 
-To uninstall, delete the plugin file and that folder. spoor never writes to your project, never starts background processes, and makes no network requests.
+To uninstall with lazy.nvim, delete `lua/plugins/spoor.lua`, run `:Lazy clean`, and delete that folder. spoor never writes to your project, never starts background processes (it only runs short `git` commands), and makes no network requests.
 
 ## Building on it
 
@@ -183,6 +201,7 @@ Field studies put about 58% of developer time into comprehension ([Xia et al. 20
 ```sh
 make test     # unit and integration tests (mini.test, an in-process fake language server)
 make e2e      # real gopls and vtsls/tsgo on tests/fixtures
+make smoke    # spoor inside real configs: no plugin manager, plain lazy.nvim, stock LazyVim
 make lint     # stylua --check
 demo/run.sh   # a throwaway LazyVim (all state under .tests/demo) with this checkout on a demo repo
 demo/capture.sh  # re-record demo/hero.gif from that LazyVim (needs node, ffmpeg, Chrome)

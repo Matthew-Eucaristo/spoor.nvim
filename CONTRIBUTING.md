@@ -7,6 +7,7 @@ Thanks for helping. spoor aims to stay small, honest and easy to read: plain Lua
 ```sh
 make test      # unit + integration tests; clones mini.nvim and snacks.nvim into deps/ on first run
 make e2e       # real language servers on tests/fixtures (skips the ones you don't have)
+make smoke     # spoor inside real configs (no plugin manager, plain lazy.nvim, stock LazyVim)
 make lint      # stylua --check (make format fixes it)
 demo/run.sh    # throwaway LazyVim with this checkout; all state stays in .tests/demo
 ```

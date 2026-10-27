@@ -33,7 +33,7 @@ local ok, err = xpcall(function()
     return package.loaded.spoor ~= nil and require("spoor").did_setup
   end, 20000, "spoor setup")
 
-  local H = require("tests.helpers")
+  local H = dofile(repo .. "/tests/helpers.lua") -- by path: other plugins ship lua/tests/ too
   local w = H.go_world()
   local p = w.process.selectionRange.start
   local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
@@ -112,6 +112,17 @@ local ok, err = xpcall(function()
     return s.win and s.win:valid() and #s.hops >= 5
   end, 5000, "trace panel")
   require("spoor.trace").close()
+
+  -- pickers are Snacks.picker, whichever picker the config uses elsewhere
+  vim.api.nvim_set_current_win(code_win)
+  require("spoor").entries()
+  wait(function()
+    return vim.bo.filetype == "snacks_picker_input"
+  end, 5000, "entries picker")
+  for _, p in ipairs(Snacks.picker.get()) do
+    p:close()
+  end
+  vim.wait(100)
 
   -- health names this buffer's server
   vim.api.nvim_set_current_win(code_win)

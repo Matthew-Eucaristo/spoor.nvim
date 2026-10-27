@@ -30,15 +30,28 @@ spoor has no AI, builds no index, and makes no network requests.
 2. INSTALL                                                     *spoor-install*
 
 Requires Neovim 0.11+, snacks.nvim, git, and a language server that supports
-`textDocument/prepareCallHierarchy`. With lazy.nvim / LazyVim: >lua
+`textDocument/prepareCallHierarchy`. Tested on macOS and Linux.
+
+With lazy.nvim / LazyVim (spoor's own `lazy.lua` brings in snacks.nvim): >lua
 
     return {
       "Matthew-Eucaristo/spoor.nvim",
+      version = "*",
       event = "VeryLazy",
-      dependencies = { "folke/snacks.nvim" },
       opts = {},
     }
 <
+With Neovim 0.12's |vim.pack|: >lua
+
+    vim.pack.add({
+      "https://github.com/folke/snacks.nvim",
+      "https://github.com/Matthew-Eucaristo/spoor.nvim",
+    })
+    require("spoor").setup()
+<
+Any other way: put spoor and snacks.nvim on 'runtimepath' and call
+`require("spoor").setup()`. Without it only |:Spoor| exists.
+
 Run |:checkhealth| `spoor` to see what each attached server supports.
 
 ==============================================================================
@@ -239,5 +252,7 @@ spoor writes only to `stdpath("state")/spoor/`:
   trails/<project>-<hash>.json trails and notes for each project
 
 Delete that folder to forget everything. spoor never writes to your project.
+To uninstall with lazy.nvim, remove the spec, run `:Lazy clean`, and delete
+that folder.
 
  vim:tw=78:ts=8:ft=help:norl:
