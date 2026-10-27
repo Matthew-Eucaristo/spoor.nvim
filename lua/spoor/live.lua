@@ -1,5 +1,6 @@
---- The always-on bow-tie panel. Follows the cursor with a debounce, cancels
---- stale requests, caches finished bow-ties, and never runs in insert mode.
+--- The live bow-tie: a card next to the cursor once it rests (and the full bow-tie on K), or a
+--- bottom panel you toggle. Debounced, cancels stale requests, caches finished bow-ties, and
+--- never runs in insert mode.
 local Config = require("spoor.config")
 local bowtie = require("spoor.bowtie")
 local lsp = require("spoor.lsp")
@@ -14,6 +15,8 @@ local M = {}
 M.panels = {}
 M.generation = 0 -- bumped on edits/writes; part of every cache key
 M.paused = false -- the user closed the panel window this session
+
+local rest, cancel_rest -- the card's rest timer (set up in M.setup)
 
 local cache = { map = {}, order = {}, size = 64 }
 
@@ -39,30 +42,50 @@ local function state_file()
   return vim.fs.joinpath(util.state_dir(), "state.json")
 end
 
---- Live is on unless the user turned it off (the choice persists).
+--- Is the bottom panel on? <leader>uB toggles it and the choice persists.
 function M.enabled()
   if M._enabled == nil then
     local state = util.read_json(state_file()) or {}
-    if state.live == nil then
-      M._enabled = Config.options.live.enabled
+    if state.panel == nil then
+      M._enabled = Config.options.live.panel == true
     else
-      M._enabled = state.live
+      M._enabled = state.panel
     end
   end
   return M._enabled
 end
+
+--- The card shows after the cursor rests (live.card.delay), unless it is turned off.
+local function card_on()
+  local card = Config.options.live.card
+  return type(card) == "table" and card.delay ~= false
+end
+
+--- The panel is showing (on, and not closed by hand this session).
+local function panel_mode()
+  return M.enabled() and not M.paused
+end
+
+--- Anything live to do at all?
+local function active()
+  return panel_mode() or card_on()
+end
+M.active = active
 
 ---@param on boolean
 function M.set(on)
   M._enabled = on
   M.paused = false
   local state = util.read_json(state_file()) or {}
-  state.live = on
+  state.panel = on
   pcall(util.write_json, state_file(), state)
   if on then
     M.update()
   else
     M.close_all()
+    if card_on() and rest then
+      rest() -- the card comes back once the cursor has rested
+    end
   end
 end
 
@@ -123,53 +146,81 @@ M.collapse = collapse
 ---@param hover integer
 local function expand(hover)
   local tab = vim.api.nvim_get_current_tabpage()
-  if M.expanded[tab] then
+  if M.expanded[tab] or M.expanding then
     return -- already showing (or hidden because the hover leaves no room)
   end
-  if M.panels[tab] then
+  local win = vim.api.nvim_get_current_win()
+  if M.panels[tab] and M.panels[tab].opts.kind == "card" then
     hide_card(true)
   end
-  -- or it stepped aside for this hover a moment ago (hovers open their windows one by one)
-  local last = M.last_card[tab]
-  local win = vim.api.nvim_get_current_win()
-  if not (last and last.origin == win and last.graph) then
-    return
-  end
-  local focus = last.graph.nodes[last.graph.focus]
-  local client, opts, origin = last.client, last.load_opts, last.origin
-  collapse()
-  if not (focus and focus.item) then
-    return
-  end
-  local e = view.new({
-    kind = "expanded",
-    max_items = Config.options.float.max_items,
-    actions = M.actions,
-    keys = {},
-    win = {
-      position = "float",
-      relative = "editor",
-      width = 40,
-      height = 4,
-      row = 0,
-      col = 0,
-      border = "rounded",
-      backdrop = false,
-      focusable = false,
-      zindex = 45, -- just under the hover
-      wo = { cursorline = false },
-    },
-  })
-  e.origin, e.hover = origin, hover
-  e:show()
-  M.expanded[tab] = e
-  -- hovers (noice, LSP) size themselves after opening: place again once they settle
-  vim.defer_fn(function()
-    if M.expanded[tab] == e then
-      e:place_expanded()
+  ---@param graph? spoor.Graph a finished graph (tree-sitter) instead of loading one
+  local function open(client, item, opts, graph)
+    if M.expanded[tab] or not vim.api.nvim_win_is_valid(win) or vim.api.nvim_get_current_win() ~= win then
+      return
     end
-  end, 120)
-  bowtie.load(e, client, focus.item, vim.tbl_extend("force", opts, { depth = Config.for_server(client.name).depth }))
+    local e = view.new({
+      kind = "expanded",
+      max_items = Config.options.float.max_items,
+      actions = M.actions,
+      keys = {},
+      win = {
+        position = "float",
+        relative = "editor",
+        width = 40,
+        height = 4,
+        row = 0,
+        col = 0,
+        border = "rounded",
+        backdrop = false,
+        focusable = false,
+        zindex = 45, -- just under the hover
+        wo = { cursorline = false },
+      },
+    })
+    e.origin, e.hover = win, hover
+    e:show()
+    M.expanded[tab] = e
+    -- hovers (noice, LSP) size themselves after opening: place again once they settle
+    vim.defer_fn(function()
+      if M.expanded[tab] == e then
+        e:place_expanded()
+      end
+    end, 120)
+    if graph then
+      return e:render(graph)
+    end
+    bowtie.load(e, client, item, vim.tbl_extend("force", opts, { depth = Config.for_server(client.name).depth }))
+  end
+  -- the card showed this function a moment ago (hovers open their windows one by one)
+  local last = M.last_card[tab]
+  if last and last.origin == win and last.graph then
+    local focus = last.graph.nodes[last.graph.focus]
+    if focus and focus.item and last.client then
+      return open(last.client, focus.item, last.load_opts)
+    end
+  end
+  -- nothing shown yet (the card waits for a rest): ask now
+  local bufnr = vim.api.nvim_win_get_buf(win)
+  local client = lsp.client(bufnr)
+  if client then
+    M.expanding = true
+    resolve.at_cursor(client, win, { group = lsp.group() }, function(item)
+      M.expanding = false
+      if item and hover and vim.api.nvim_win_is_valid(hover) then
+        open(client, item, {
+          root = util.root(bufnr, client),
+          bufnr = bufnr,
+          callers = Config.for_server(client.name).live_callers,
+        })
+      end
+    end)
+  elseif Config.options.syntax then
+    syntax.at_cursor(win, function(g)
+      if g and hover and vim.api.nvim_win_is_valid(hover) then
+        open(nil, nil, nil, g)
+      end
+    end)
+  end
 end
 
 ---@param v spoor.View
@@ -275,13 +326,19 @@ M.keys = vim.tbl_extend("force", view.keys, {
 local function panel()
   local tab = vim.api.nvim_get_current_tabpage()
   local v = M.panels[tab]
-  if v and v:valid() then
+  local want = panel_mode() and "panel" or "card"
+  if v and v:valid() and v.opts.kind == want then
     return v
+  end
+  if v and v:valid() then -- switching between the card and the panel
+    v.closing = true
+    v:close()
+    M.panels[tab] = nil
   end
   local o = Config.options.live
   local float = o.layout == "float"
   local width = math.min(math.floor(vim.o.columns * 0.62), 140)
-  if o.layout == "cursor" then
+  if want == "card" then
     local w = math.min(o.card.width, vim.o.columns - 4)
     v = view.new({
       kind = "card",
@@ -348,7 +405,7 @@ end
 
 --- Follow the cursor once (called debounced).
 function M.update()
-  if not M.enabled() or M.paused then
+  if not active() then
     return
   end
   local mode = vim.api.nvim_get_mode().mode
@@ -358,6 +415,9 @@ function M.update()
   local win = vim.api.nvim_get_current_win()
   if not followable(win) then
     return hide_card()
+  end
+  if not panel_mode() and not M.card_due then
+    return -- the card waits until the cursor has rested (live.card.delay)
   end
   local bufnr = vim.api.nvim_win_get_buf(win)
   local client = lsp.client(bufnr)
@@ -390,10 +450,11 @@ function M.update()
       end
       return hide_card()
     end
-    if Config.options.live.layout == "cursor" and cursor_float(win) then
+    if cursor_float(win) then
       return expand(cursor_float(win) --[[@as integer]]) -- K: the full bow-tie next to the hover
     end
-    if v and v:valid() and v.key == key then
+    local kind = panel_mode() and "panel" or "card"
+    if v and v:valid() and v.key == key and v.opts.kind == kind then
       if v.opts.kind == "card" then
         v.origin = win
         v:place_card() -- follow the cursor
@@ -457,7 +518,7 @@ end
 --- server's answer and opens windows without autocommands), so one look is not enough.
 local watching
 local function watch_hover()
-  if Config.options.live.layout ~= "cursor" or watching then
+  if watching then
     return
   end
   local tries = 0
@@ -487,6 +548,12 @@ local schedule, cancel_schedule
 
 function M.setup()
   schedule, cancel_schedule = util.debounce(Config.options.live.debounce, M.update)
+  local card = Config.options.live.card
+  local delay = type(card) == "table" and tonumber(card.delay) or 0
+  rest, cancel_rest = util.debounce(math.max(delay, Config.options.live.debounce), function()
+    M.card_due = true -- the cursor stayed put: the card may show
+    M.update()
+  end)
   local group = vim.api.nvim_create_augroup("spoor_live", { clear = true })
   vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter", "InsertLeave", "LspAttach", "TabEnter" }, {
     group = group,
@@ -496,8 +563,16 @@ function M.setup()
       if e and ev.event == "CursorMoved" and vim.api.nvim_get_current_win() == e.origin then
         collapse()
       end
-      if M.enabled() and not M.paused then
+      if ev.event == "CursorMoved" then
+        M.card_due = false -- a rest starts over whenever the cursor moves
+      end
+      if panel_mode() then
         schedule()
+      elseif card_on() then
+        -- moving hides the card; it comes back once the cursor rests again
+        M.card_due = false
+        hide_card()
+        rest()
       end
     end,
   })
@@ -505,6 +580,8 @@ function M.setup()
     group = group,
     callback = function()
       cancel_schedule()
+      cancel_rest()
+      M.card_due = false
       for _, g in ipairs({ M.group, bowtie.open_group, require("spoor.trace").start_group }) do
         g:cancel()
       end
@@ -522,12 +599,12 @@ function M.setup()
       local e = M.expanded[vim.api.nvim_get_current_tabpage()]
       if e and not (e.hover and vim.api.nvim_win_is_valid(e.hover)) then
         collapse() -- its hover closed without telling anyone (noice closes with noautocmd)
-        if M.enabled() and not M.paused then
-          schedule()
+        if panel_mode() or M.card_due then
+          schedule() -- back to what was showing before K
         end
         return
       end
-      if M.enabled() and not M.paused then
+      if Config.options.live.hover ~= false then
         watch_hover()
       end
     end,
@@ -542,12 +619,14 @@ function M.setup()
           if e and closed == e.hover then
             collapse()
           end
-          if M.enabled() and not M.paused then
+          if panel_mode() or M.card_due then
             schedule()
           end
         end)
       end
-      watch_hover()
+      if Config.options.live.hover ~= false then
+        watch_hover()
+      end
     end,
   })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufWritePost" }, {

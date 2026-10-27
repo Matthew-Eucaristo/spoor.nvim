@@ -5,12 +5,15 @@ local M = {}
 M.defaults = {
   -- The live bow-tie: callers | focus | callees, following the cursor.
   live = {
-    enabled = true, -- first-run default; the <leader>uB toggle persists your choice
-    debounce = 120, -- ms the cursor must rest before spoor asks the language server
-    layout = "cursor", -- "cursor" (a card next to the cursor, like hover), "bottom" (split panel) or "float"
-    height = 8, -- bottom panel rows, header included
-    max_items = 6, -- bottom panel: rows per side before "+N more"
-    card = { width = 64, max_items = 4 }, -- the cursor card; gag opens the full bow-tie
+    panel = false, -- the bottom panel: first-run default; <leader>uB toggles it and remembers
+    debounce = 120, -- ms the cursor must rest before the panel asks the language server
+    layout = "bottom", -- where the panel goes: "bottom" (split) or "float" (a corner)
+    height = 8, -- panel rows, header included
+    max_items = 6, -- panel: rows per side before "+N more"
+    -- rest the cursor this long (ms) and a card shows the bow-tie next to it; false = never.
+    -- K (hover) shows the full bow-tie right away either way.
+    card = { delay = 5000, width = 64, max_items = 4 },
+    hover = true, -- K: the full bow-tie next to the hover, at once; false leaves K alone
   },
   -- The on-demand float (gag) with deeper levels.
   float = {

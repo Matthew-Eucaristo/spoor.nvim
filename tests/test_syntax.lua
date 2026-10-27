@@ -115,7 +115,7 @@ end
 
 T["the live card falls back to syntax and says so"] = function()
   open("shop.lua", "function M.process", "process")
-  require("spoor").setup({ live = { debounce = 10, layout = "bottom" } })
+  require("spoor").setup({ live = { debounce = 10, panel = true, layout = "bottom" } })
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   local live = require("spoor.live")
   local v
@@ -130,7 +130,7 @@ end
 
 T["the card footer names syntax, not a server"] = function()
   open("shop.lua", "function M.process", "process")
-  require("spoor").setup({ live = { debounce = 10 } })
+  require("spoor").setup({ live = { debounce = 10, card = { delay = 0 } } })
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   local live = require("spoor.live")
   local v
@@ -152,7 +152,7 @@ T["a server without call hierarchy (marksman, ty) gets the syntax bow-tie"] = fu
     handlers = {},
     capabilities = { documentSymbolProvider = true, referencesProvider = true },
   })
-  require("spoor").setup({ live = { debounce = 10, layout = "bottom" } })
+  require("spoor").setup({ live = { debounce = 10, panel = true, layout = "bottom" } })
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   local live = require("spoor.live")
   H.wait(function()
@@ -179,7 +179,7 @@ T["a server with call hierarchy always wins over syntax"] = function()
       end,
     },
   })
-  require("spoor").setup({ live = { debounce = 10, layout = "bottom" } })
+  require("spoor").setup({ live = { debounce = 10, panel = true, layout = "bottom" } })
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   local live = require("spoor.live")
   local v
@@ -194,7 +194,7 @@ end
 
 T["syntax = false turns the fallback off"] = function()
   open("shop.lua", "function M.process", "process")
-  require("spoor").setup({ syntax = false, live = { debounce = 10, layout = "bottom" } })
+  require("spoor").setup({ syntax = false, live = { debounce = 10, panel = true, layout = "bottom" } })
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   vim.wait(200)
   eq(require("spoor.live").panels[vim.api.nvim_get_current_tabpage()], nil)

@@ -7,8 +7,11 @@ local p = w.process.selectionRange.start
 local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
 H.fake_server(bufnr, { handlers = H.go_handlers(w) })
 local code = vim.api.nvim_get_current_win()
-require("spoor").setup({ live = { enabled = true, debounce = 10, layout = os.getenv("LAYOUT") or "cursor" } })
-require("spoor").toggle(true)
+local panel = os.getenv("LAYOUT") == "bottom"
+require("spoor").setup({ live = { debounce = 10, panel = panel, layout = "bottom", card = { delay = 0 } } })
+if panel then
+  require("spoor").toggle(true)
+end
 vim.api.nvim_exec_autocmds("CursorMoved", {})
 H.wait(function()
   local v = require("spoor.live").panels[vim.api.nvim_get_current_tabpage()]

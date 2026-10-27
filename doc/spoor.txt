@@ -63,9 +63,26 @@ Run |:checkhealth| `spoor` to see what each attached server supports.
 ==============================================================================
 3. LIVE BOW-TIE                                                   *spoor-live*
 
-When the cursor rests on a call or inside a function, a card next to the
-cursor shows the bow-tie, like an always-on hover (with `live.layout =
-"bottom"`, a panel at the bottom): >
+spoor stays out of the way while you move. Three ways to see the bow-tie:
+
+K                   Your usual hover, and next to it the full bow-tie
+                    (`float.depth` levels, `float.max_items` rows), in the
+                    largest free part of the screen that covers neither the
+                    hover nor the cursor line. Moving on closes it. Works with
+                    any hover (noice, plain LSP) and with signature or
+                    diagnostic floats; `live.hover = false` turns it off.
+
+(rest)              Leave the cursor on a function for `live.card.delay` ms
+                    (5000) and a small card shows the bow-tie just above the
+                    cursor line. It never takes focus and goes away as soon
+                    as you move. `card = { delay = false }` turns it off.
+
+<leader>uB          Turn a panel at the bottom on or off (`live.layout =
+                    "float"` puts it in a corner). It follows the cursor and
+                    the choice persists across sessions. `:q` in the panel
+                    pauses it for this session.
+
+All of them look like this: >
     CALLERS 2                                       CALLEES 5
     handleOrders  server.go:32 ──╮             ╭─▶ validate
     TestProcess  order_test.go ──┤             ├─▶ applyDiscount
@@ -74,26 +91,13 @@ cursor shows the bow-tie, like an always-on hover (with `live.layout =
                                                ╰─▶ Emit
 <
 On a call, the focus is the called function. Anywhere else in a body, it is
-the enclosing function. Requests are debounced (`live.debounce`), stale ones
-are cancelled, finished bow-ties are cached until you edit or save, and
-nothing is sent in insert mode. The card sits just above the cursor line (below
-it near the top of the window), never takes focus, and hides while you type or
-when the cursor is not in a function.
-
-When a hover opens at the cursor (|K|, or a signature or diagnostic float), the
-card grows into the full bow-tie (`float.depth` levels, `float.max_items`
-rows) in the largest free part of the screen that covers neither the hover nor
-the cursor line. Moving the cursor, or the hover closing, folds it back. Use
-|spoor-gag| to interact with the bow-tie.
-
-<leader>uB          Toggle the live bow-tie. The choice persists across
-                    sessions. `:q` in the panel pauses it for this session;
-                    `:only` or `:tabclose` just close it until the cursor
-                    rests again.
+the enclosing function. Requests are debounced, stale ones are cancelled,
+finished bow-ties are cached until you edit or save, and nothing is sent in
+insert mode. Use |spoor-gag| to move through a bow-tie.
 
 Bottom panel keys: <CR> jump, h / l columns, <Tab> open the float on the
 node, t trace from the node, H show hidden, R retry, y copy as Mermaid,
-q turn live off, g? help.
+q turn the panel off, g? help.
 
 ==============================================================================
 4. BOW-TIE FLOAT                                    *spoor-bowtie* *spoor-gag*
@@ -255,9 +259,10 @@ index is rebuilt once per edit. A server that can answer always wins;
 Pass a table to `require("spoor").setup()` (`opts` in lazy.nvim). Defaults:
 >lua
     {
-      live = { enabled = true, debounce = 120, layout = "cursor",
+      live = { panel = false, debounce = 120, layout = "bottom",
                height = 8, max_items = 6,
-               card = { width = 64, max_items = 4 } },
+               card = { delay = 5000, width = 64, max_items = 4 },
+               hover = true },
       float = { width = 0.86, depth = 2, max_items = 12, preview = true },
       timeout = 1500,        -- per request, ms
       cold_timeout = 15000,  -- while a server is still indexing

@@ -38,7 +38,7 @@ function M.setup(opts)
     if require("spoor.ui").snacks() and Snacks.toggle then
       Snacks.toggle({
         id = "spoor_live",
-        name = "Live Bow-tie",
+        name = "Bow-tie Panel",
         get = function()
           return require("spoor.live").enabled()
         end,
@@ -47,7 +47,7 @@ function M.setup(opts)
         end,
       }):map(keys.toggle)
     else
-      map(keys.toggle, M.toggle, "Toggle Live Bow-tie")
+      map(keys.toggle, M.toggle, "Toggle Bow-tie Panel")
     end
   end
   local ok, wk = pcall(require, "which-key")
@@ -92,7 +92,7 @@ function M.changes(ref)
   require("spoor.changes").open({ ref = ref })
 end
 
---- Turn the live bow-tie on or off; the choice persists.
+--- Turn the bottom bow-tie panel on or off; the choice persists.
 ---@param on? boolean
 function M.toggle(on)
   local live = require("spoor.live")

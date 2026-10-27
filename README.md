@@ -6,7 +6,7 @@ Follow the trail through a codebase without leaving Neovim. spoor shows who call
 
 A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the same way: pick a focus, look at its neighbours, follow one path, and write down what they learn. The slow part is not following calls but losing the trail. spoor makes that cheap:
 
-- **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. A small card next to the cursor shows them as you move, like an always-on hover: it never takes focus or covers the line you are on, and hides while you type. Press `K` and, next to the hover, the card grows into the full bow-tie (two levels, every row); move on and it folds back. `gag` opens the full bow-tie two levels deep: moving through it shows each function's code above, `<CR>` goes there and `<Esc>` puts you back. `<C-v>`, `<C-s>` or `<C-t>` keep it open in a split or a tab of its own.
+- **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. Nothing gets in the way while you move. Press `K` and the full bow-tie (two levels, every row) appears next to the hover; move on and it goes. Rest the cursor on a function for 5 seconds and a small card shows the same at a glance. `<leader>uB` keeps a panel at the bottom instead. `gag` opens the full bow-tie two levels deep: moving through it shows each function's code above, `<CR>` goes there and `<Esc>` puts you back. `<C-v>`, `<C-s>` or `<C-t>` keep it open in a split or a tab of its own.
 - **Trace mode.** `gat` walks one hop at a time while the code opens beside you. Add notes as you go and resume the trail tomorrow with `<leader>ct`.
 - **What did the agent change?** `<leader>cG` lists the functions touched since the branch point, each with its bow-tie. A new function with no callers is flagged, because that is often the first sign an agent went off track.
 - **Entry points.** `<leader>ce` finds `main` functions, HTTP routes, Next.js pages and route handlers, Flutter `main → runApp`, and package scripts. Picking one starts a trace there.
@@ -57,7 +57,8 @@ Every key below was checked against LazyVim 16, its language extras (including J
 
 | Key | What it does |
 |---|---|
-| `<leader>uB` | Turn the live bow-tie on or off. The choice is remembered. |
+| `K` | Your usual hover, plus the full bow-tie next to it |
+| `<leader>uB` | Turn the bottom panel on or off. The choice is remembered. |
 | `gag` | Open the bow-tie float at the cursor, two levels deep |
 | `gat` | Start a trace at the cursor |
 | `<leader>ct` | Resume the last trail in this project |
@@ -182,12 +183,13 @@ These are the defaults. Pass only what you want to change in `opts`.
 ```lua
 {
   live = {
-    enabled = true, -- first-run default; <leader>uB remembers your choice
-    debounce = 120, -- ms the cursor must rest
-    layout = "cursor", -- "cursor" card (like hover), "bottom" panel, or "float" in a corner
-    height = 8, -- bottom panel
-    max_items = 6, -- bottom panel: rows per side before "+N more"
-    card = { width = 64, max_items = 4 },
+    panel = false, -- the bottom panel at first; <leader>uB toggles it and remembers
+    debounce = 120, -- ms the cursor must rest before the panel updates
+    layout = "bottom", -- the panel: "bottom" split or "float" in a corner
+    height = 8,
+    max_items = 6, -- panel rows per side before "+N more"
+    card = { delay = 5000, width = 64, max_items = 4 }, -- rest this long for the card; false = never
+    hover = true, -- K: the full bow-tie next to the hover
   },
   float = {
     width = 0.86,

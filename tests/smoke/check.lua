@@ -54,9 +54,9 @@ local ok, err = xpcall(function()
     ["Trails"] = true,
     ["Entry Points"] = true,
     ["Changed Symbols (git)"] = true,
-    ["Toggle Live Bow-tie"] = true,
-    ["Enable Live Bow-tie"] = true, -- Snacks.toggle names the action by state
-    ["Disable Live Bow-tie"] = true,
+    ["Toggle Bow-tie Panel"] = true,
+    ["Enable Bow-tie Panel"] = true, -- Snacks.toggle names the action by state
+    ["Disable Bow-tie Panel"] = true,
   }
   local all = vim.list_extend(vim.api.nvim_get_keymap("n"), vim.api.nvim_buf_get_keymap(bufnr, "n"))
   for raw, lhs in pairs(mine) do
@@ -77,7 +77,8 @@ local ok, err = xpcall(function()
     end
   end
 
-  -- live panel
+  -- the bottom panel, as <leader>uB turns it on
+  require("spoor").toggle(true)
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   local live = require("spoor.live")
   local function panel_text()

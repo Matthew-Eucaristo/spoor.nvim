@@ -18,7 +18,7 @@ local function start(config)
   local p = w.process.selectionRange.start
   local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
   local server = H.fake_server(bufnr, { handlers = H.go_handlers(w) })
-  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10 } }, config or {}))
+  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10, card = { delay = 0 } } }, config or {}))
   return w, bufnr, server
 end
 
@@ -299,6 +299,101 @@ T["<C-s> and <C-t> move it to a bottom split or a tab of its own"] = function()
   p = require("spoor.bowtie").pinned
   eq(vim.api.nvim_win_get_tabpage(p.win.win), vim.api.nvim_get_current_tabpage())
   vim.cmd("tabclose")
+end
+
+T["by default nothing shows while moving; the card comes after the cursor rests"] = function()
+  local w = H.go_world()
+  local p = w.process.selectionRange.start
+  local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
+  H.fake_server(bufnr, { handlers = H.go_handlers(w) })
+  require("spoor").setup({ live = { debounce = 10, card = { delay = 400 } } })
+  eq(require("spoor.live").enabled(), false) -- no panel unless you turn it on
+  vim.cmd("normal! zz")
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  vim.wait(200)
+  eq(card(), nil) -- still resting
+  H.wait(function()
+    local v = card()
+    return v and v.graph and v.graph.complete
+  end, 3000, "card after the rest")
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  eq(card(), nil) -- moving hides it at once
+  eq(#vim.tbl_filter(function(win)
+    return vim.api.nvim_win_get_config(win).relative == "" and vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "spoor"
+  end, vim.api.nvim_list_wins()), 0) -- and no panel
+end
+
+T["K shows the full bow-tie at once, before any card"] = function()
+  local w = H.go_world()
+  local p = w.process.selectionRange.start
+  local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
+  H.fake_server(bufnr, { handlers = H.go_handlers(w) })
+  require("spoor").setup({ live = { debounce = 10, card = { delay = 60000 } } })
+  vim.cmd("normal! zz")
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  vim.wait(100)
+  eq(card(), nil)
+  local hover = open_hover(1)
+  vim.api.nvim_exec_autocmds("CursorHold", {}) -- what follows pressing K
+  H.wait(function()
+    local e = expanded()
+    return e and e.graph and e.graph.complete
+  end, 3000, "full bow-tie")
+  eq(expanded().graph.nodes[expanded().graph.focus].name, "Process")
+  vim.api.nvim_win_close(hover, true)
+  vim.api.nvim_win_set_cursor(0, { vim.api.nvim_win_get_cursor(0)[1] + 1, 0 })
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  eq(expanded(), nil)
+  vim.wait(150)
+  eq(card(), nil) -- no rest yet, so no card
+end
+
+T["<leader>uB turns the bottom panel on, and the card makes way for it"] = function()
+  start()
+  require("spoor").toggle(true)
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  H.wait(function()
+    local v = require("spoor.live").panels[vim.api.nvim_get_current_tabpage()]
+    return v and v:valid() and v.opts.kind == "panel" and v.graph and v.graph.complete
+  end, 3000, "panel")
+  eq(card(), nil)
+  require("spoor").toggle(false)
+  eq(require("spoor.live").panels[vim.api.nvim_get_current_tabpage()], nil)
+end
+
+T["<leader>uB on a function the card shows switches to the panel at once"] = function()
+  start()
+  vim.cmd("normal! zz")
+  wait_card()
+  require("spoor").toggle(true)
+  H.wait(function()
+    local v = require("spoor.live").panels[vim.api.nvim_get_current_tabpage()]
+    return v and v:valid() and v.opts.kind == "panel"
+  end, 1000, "panel replaces the card")
+  eq(card(), nil)
+end
+
+T["after the panel goes off, the card waits for a fresh rest"] = function()
+  local w = H.go_world()
+  local p = w.process.selectionRange.start
+  local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
+  H.fake_server(bufnr, { handlers = H.go_handlers(w) })
+  require("spoor").setup({ live = { debounce = 10, card = { delay = 400 } } })
+  vim.cmd("normal! zz")
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  H.wait(function()
+    return card() ~= nil
+  end, 3000, "card after rest")
+  require("spoor").toggle(true)
+  vim.api.nvim_win_set_cursor(0, { vim.api.nvim_win_get_cursor(0)[1] + 1, 0 })
+  vim.api.nvim_exec_autocmds("CursorMoved", {}) -- you moved while the panel was on
+  vim.wait(100)
+  require("spoor").toggle(false)
+  vim.wait(150)
+  eq(card(), nil) -- not straight back: the cursor hasn't rested since
+  H.wait(function()
+    return card() ~= nil
+  end, 3000, "card after a new rest")
 end
 
 return T

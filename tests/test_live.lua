@@ -8,7 +8,11 @@ local function start(opts)
   local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
   local server = H.fake_server(bufnr, { handlers = H.go_handlers(w), delay = opts and opts.delay })
   require("spoor").setup(
-    vim.tbl_deep_extend("force", { live = { debounce = 10, layout = "bottom" } }, opts and opts.config or {})
+    vim.tbl_deep_extend(
+      "force",
+      { live = { debounce = 10, panel = true, layout = "bottom" } },
+      opts and opts.config or {}
+    )
   )
   return w, bufnr, server
 end
@@ -96,7 +100,12 @@ end
 
 T["entering insert mode cancels a pending update"] = function()
   local _, _, server = start({ config = { live = { debounce = 40 } } })
-  vim.wait(150)
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  H.wait(function()
+    local v = require("spoor.live").panels[vim.api.nvim_get_current_tabpage()]
+    return v and v.graph and v.graph.complete
+  end, 3000, "panel")
+  vim.wait(150) -- let the debounced update from that move finish before counting
   local before = #server.requests
   require("spoor.live").panels[vim.api.nvim_get_current_tabpage()].key = "other"
   vim.api.nvim_exec_autocmds("CursorMoved", {})
@@ -114,7 +123,7 @@ T["toggle off closes the panel and persists"] = function()
   require("spoor").toggle(false)
   eq(panel(), nil)
   local state = require("spoor.util").read_json(require("spoor.util").state_dir() .. "/state.json")
-  eq(state.live, false)
+  eq(state.panel, false)
   -- a fresh session reads the saved choice
   package.loaded["spoor.live"] = nil
   eq(require("spoor.live").enabled(), false)
@@ -170,7 +179,7 @@ T["t in the panel traces from the code window"] = function()
 end
 
 T["buffers without a language server leave the panel alone"] = function()
-  require("spoor").setup({ live = { debounce = 10 } })
+  require("spoor").setup({ live = { debounce = 10, card = { delay = 0 } } })
   vim.cmd("enew")
   vim.bo.buftype = "nofile"
   vim.api.nvim_exec_autocmds("CursorMoved", {})

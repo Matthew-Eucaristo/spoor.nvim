@@ -21,7 +21,7 @@ local function start(config)
   local p = w.process.selectionRange.start
   local bufnr = H.edit(H.go .. "/internal/order/order.go", p.line + 1, p.character)
   H.fake_server(bufnr, { handlers = H.go_handlers(w) })
-  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10 } }, config or {}))
+  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10, card = { delay = 0 } } }, config or {}))
   return w, bufnr
 end
 
@@ -48,7 +48,7 @@ T["setup maps the keys and needs nothing else"] = function()
   eq(msgs, {})
   eq(require("spoor.ui").snacks(), false)
   eq(vim.fn.maparg("gag", "n", false, true).desc, "Bow-tie (callers | callees)")
-  eq(vim.fn.maparg(vim.keycode("<leader>uB"), "n", false, true).desc, "Toggle Live Bow-tie")
+  eq(vim.fn.maparg(vim.keycode("<leader>uB"), "n", false, true).desc, "Toggle Bow-tie Panel")
 end
 
 T["the live card follows the cursor in a plain float"] = function()
@@ -67,7 +67,7 @@ T["the live card follows the cursor in a plain float"] = function()
 end
 
 T["the bottom panel is a plain split; g? lists its keys; q turns live off"] = function()
-  start({ live = { layout = "bottom" } })
+  start({ live = { panel = true, layout = "bottom" } })
   vim.api.nvim_exec_autocmds("CursorMoved", {})
   H.wait(function()
     return shown(panel())

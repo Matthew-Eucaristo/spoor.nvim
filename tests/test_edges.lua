@@ -38,7 +38,9 @@ local function go_buffer(opts)
 end
 
 local function setup(config)
-  require("spoor").setup(vim.tbl_deep_extend("force", { live = { debounce = 10, layout = "bottom" } }, config or {}))
+  require("spoor").setup(
+    vim.tbl_deep_extend("force", { live = { debounce = 10, panel = true, layout = "bottom" } }, config or {})
+  )
 end
 
 local function move()
@@ -248,10 +250,10 @@ end
 T["a corrupt state.json falls back to the default"] = function()
   local dir = require("spoor.util").state_dir()
   vim.fn.writefile({ "{not json" }, dir .. "/state.json")
-  setup({ live = { enabled = true } })
+  setup({ live = { panel = true } })
   eq(require("spoor.live").enabled(), true)
   require("spoor").toggle(false)
-  eq(require("spoor.util").read_json(dir .. "/state.json").live, false)
+  eq(require("spoor.util").read_json(dir .. "/state.json").panel, false)
 end
 
 T["a tiny editor still renders the panel"] = function()

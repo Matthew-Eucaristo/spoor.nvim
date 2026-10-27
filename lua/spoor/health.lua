@@ -62,7 +62,14 @@ function M.check()
     h.info(("your rules: %d framework, %d entry-point"):format(#rules, vim.tbl_count(opts.entries or {})))
   end
   local live = require("spoor.live")
-  h.info("live bow-tie: " .. (live.enabled() and "on" or "off") .. (live.paused and " (paused this session)" or ""))
+  local card = require("spoor.config").options.live.card
+  h.info(
+    "bottom panel: "
+      .. (live.enabled() and "on" or "off")
+      .. (live.paused and " (paused this session)" or "")
+      .. "; card: "
+      .. ((type(card) == "table" and card.delay ~= false) and ("after " .. card.delay .. " ms at rest") or "off")
+  )
   h.info("state: " .. require("spoor.util").state_dir())
 
   h.start("spoor.nvim: language servers in this buffer")

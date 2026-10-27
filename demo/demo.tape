@@ -15,21 +15,29 @@ Set Theme "TokyoNight"
 
 Hide
 Type "source demo/vhs-env.sh" Enter
-Type "demo/run.sh" Enter
+Type "rm -f .tests/demo/state/spoor-demo/spoor/state.json && demo/run.sh" Enter
 Sleep 14s
 Escape
-Type "25Gw"
-Sleep 4s
+Type "15G0"
+Sleep 1s
 Show
 
-# Rest on a function: a small card next to the cursor shows callers and callees.
-Sleep 2.5s
-Type "jfv" Sleep 2.5s
+# Moving around: nothing in the way.
+Type "jjjjjjjjjj" Sleep 1s
 
-# K: next to the hover, the card grows into the full bow-tie; j folds it back.
-Type "25G0w" Sleep 1.5s
+# K on a function: the usual hover, and the full bow-tie next to it. j: gone.
+Type "0w" Sleep 1s
 Type "K" Sleep 3.5s
-Type "j" Sleep 1.5s
+Type "j" Sleep 1s
+
+# Rest inside a function for a few seconds: a small card shows the same at a glance.
+Sleep 6.5s
+
+# <leader>uB: a panel at the bottom that follows the cursor, until you turn it off.
+Type " uB" Sleep 2s
+Type "jfv" Sleep 2s
+Type " uB" Sleep 1s
+Type "25G0w" Sleep 1s
 
 # gag: the full bow-tie. Moving through it previews each function in the code above.
 Type "25Gw" Sleep 1.5s

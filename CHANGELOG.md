@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Out of the way by default: nothing shows while you move. `K` shows the full bow-tie next to the hover at once (also before any card); resting the cursor on a function for `live.card.delay` (5 s) shows the small card. `live.hover = false` and `card = { delay = false }` turn them off.
+- `<leader>uB` now toggles a bottom panel (`live.panel`, off at first; `live.layout = "bottom"` or `"float"`). It replaces the old on/off for the live view, and its state is saved under a new key, so an old "on" doesn't turn the panel on.
+
 ## 1.2.0 - 2026-10-27
 
 - `K` grows the card: when a hover opens at the cursor, the card turns into the full bow-tie (two levels, every row) next to it, in the largest free part of the screen. Moving on folds it back. Works with noice and plain LSP hovers, which open their windows late and without autocommands.
