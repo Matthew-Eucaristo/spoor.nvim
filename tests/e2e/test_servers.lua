@@ -33,7 +33,8 @@ local function start(cmd, root, file, line_pattern)
     local c = vim.lsp.get_client_by_id(id)
     return c and c.initialized
   end, 20000, "server init")
-  require("spoor.config").setup({ cold_timeout = 30000 })
+  -- correctness, not runner speed: a cold CI runner can take seconds per lookup
+  require("spoor.config").setup({ timeout = 10000, cold_timeout = 30000 })
   return vim.lsp.get_client_by_id(id)
 end
 
