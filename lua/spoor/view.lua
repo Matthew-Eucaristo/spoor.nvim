@@ -23,12 +23,13 @@ M.ns = ns
 ---@field key? string live: cache key of the focus shown
 ---@field closing? boolean closed by spoor, not by hand
 ---@field user_quit? boolean live: :q was typed in the panel
+---@field hover? integer expanded: the hover window it sits next to
 ---@field preview? {buf: integer, view: table, opened: table<integer, boolean>, shown?: string} float: the code window before previews
 local View = {}
 View.__index = View
 
 ---@class spoor.ViewOpts
----@field kind "panel"|"float"|"card"|"pinned" panel/card: live; float: gag; pinned: a split or tab you moved the float to
+---@field kind "panel"|"float"|"card"|"expanded"|"pinned" panel/card: live; expanded: the card grown next to a hover; float: gag; pinned: a split or tab you moved the float to
 ---@field win snacks.win.Config|{}
 ---@field max_items integer
 ---@field max_rows? integer
@@ -115,6 +116,9 @@ function View:render(g)
   if self.opts.kind == "card" then
     return self:place_card(#r.lines)
   end
+  if self.opts.kind == "expanded" then
+    return self:place_expanded(#r.lines)
+  end
   if self.opts.kind == "float" or self.opts.kind == "pinned" then
     if self.opts.kind == "float" then
       self:fit(#r.lines)
@@ -188,7 +192,60 @@ function View:place_card(n)
   end
 end
 
---- Title/footer (float, card) or winbar (panel, pinned).
+--- The full bow-tie shown next to a hover (K): in the largest band of the screen that covers
+--- neither the cursor line nor the hover, shrunk to fit when the hover is big.
+---@param n? integer lines
+function View:place_expanded(n)
+  if not self:valid() then
+    return
+  end
+  n = n or (self.rendered and #self.rendered.lines) or 4
+  local origin = self.origin
+  if not vim.api.nvim_win_is_valid(origin) then
+    return
+  end
+  local pos = vim.api.nvim_win_call(origin, function()
+    return vim.fn.screenpos(0, vim.fn.line("."), vim.fn.col("."))
+  end)
+  local cursor = math.max(pos.row - 1, 0)
+  local busy = { { cursor, cursor } }
+  local hover = self.hover
+  if hover and vim.api.nvim_win_is_valid(hover) then
+    local top = vim.api.nvim_win_get_position(hover)[1]
+    busy[#busy + 1] = { top, top + vim.api.nvim_win_get_height(hover) + 1 } -- with its border
+  end
+  table.sort(busy, function(a, b)
+    return a[1] < b[1]
+  end)
+  -- the largest free band between the tabline and the statusline
+  local from, last = 1, vim.o.lines - vim.o.cmdheight - 2
+  local best
+  local function consider(a, b)
+    if b >= a and (not best or b - a > best[2] - best[1]) then
+      best = { a, b }
+    end
+  end
+  for _, b in ipairs(busy) do
+    consider(from, b[1] - 1)
+    from = math.max(from, b[2] + 1)
+  end
+  consider(from, last)
+  local room = best and (best[2] - best[1] + 1 - 2) or 0 -- minus the border
+  if room < 3 then
+    return self.win:hide() -- no space worth drawing in; the hover has the screen
+  end
+  local h = math.min(math.max(n, 3), room)
+  -- hug the cursor: the bottom of a band above it, the top of a band below it
+  local row = best[2] < cursor and (best[2] - h - 1) or best[1]
+  local w = math.min(math.floor(vim.o.columns * Config.options.float.width), vim.o.columns - 4)
+  local col = math.floor((vim.o.columns - w) / 2)
+  local cfg = vim.api.nvim_win_get_config(self.win.win)
+  if cfg.height ~= h or cfg.width ~= w or cfg.row ~= row or cfg.col ~= col then
+    vim.api.nvim_win_set_config(self.win.win, { relative = "editor", row = row, col = col, width = w, height = h })
+  end
+end
+
+--- Title/footer (float, card, expanded) or winbar (panel, pinned).
 ---@param r spoor.Rendered
 function View:decorate(r)
   if not self:valid() then

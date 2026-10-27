@@ -94,19 +94,109 @@ T["near the top of the window the card goes below the cursor line"] = function()
   eq(top > cursor_row(), true)
 end
 
-T["the card steps aside for a hover float and comes back"] = function()
-  start()
-  wait_card()
+local function expanded()
+  local e = require("spoor.live").expanded[vim.api.nvim_get_current_tabpage()]
+  return e and e:valid() and e or nil
+end
+
+local function open_hover(row)
+  vim.cmd("redraw") -- with a UI there's always a redraw between moving and pressing K
   local buf = vim.api.nvim_create_buf(false, true)
-  local hover = vim.api.nvim_open_win(buf, false, { relative = "cursor", row = 1, col = 0, width = 20, height = 2 })
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "func Process(...) error", "", "Process validates..." })
+  return vim.api.nvim_open_win(buf, false, { relative = "cursor", row = row or 1, col = 0, width = 30, height = 3 })
+end
+
+T["K grows the card into the full bow-tie beside the hover; moving folds it back"] = function()
+  start()
+  local code = vim.api.nvim_get_current_win()
+  vim.cmd("normal! zz")
+  wait_card()
+  local hover = open_hover(1) -- below the cursor, like K
   H.wait(function()
-    return card() == nil
-  end, 2000, "card hidden for hover")
+    local e = expanded()
+    return e and e.graph and e.graph.complete
+  end, 3000, "full bow-tie")
+  local e = expanded()
+  eq(card(), nil)
+  eq(vim.api.nvim_win_get_config(e.win.win).focusable, false)
+  eq(vim.api.nvim_get_current_win(), code)
+  -- more than the card: two levels (depth from the server's settings) and more rows
+  local text = table.concat(vim.api.nvim_buf_get_lines(e.win.buf, 0, -1, false), "\n")
+  expect.no_equality(text:find("Emit", 1, true), nil) -- the 5th callee the card folds into "+1 more"
+  -- in a free band: never on the cursor line, never under the hover
+  local top, bottom = rows(e)
+  local cr = cursor_row()
+  eq(top > cr or bottom < cr, true)
+  local htop = vim.api.nvim_win_get_position(hover)[1]
+  local hbottom = htop + vim.api.nvim_win_get_height(hover) + 1
+  eq(bottom < htop or top > hbottom, true)
+  -- j: the hover goes (as LSP hovers do) and the card comes back
+  vim.api.nvim_win_close(hover, true)
+  vim.api.nvim_win_set_cursor(code, { vim.api.nvim_win_get_cursor(code)[1] + 1, 0 })
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  eq(expanded(), nil)
+  wait_card()
+end
+
+T["a big hover above the cursor: the full bow-tie fits around it, never under it"] = function()
+  start()
+  vim.cmd("normal! zz")
+  wait_card()
+  vim.cmd("redraw")
+  local buf = vim.api.nvim_create_buf(false, true)
+  local cr = cursor_row()
+  local hover = vim.api.nvim_open_win(buf, false, {
+    relative = "cursor",
+    row = -(cr - 2),
+    col = 0,
+    width = 40,
+    height = cr - 4, -- most of the screen above the cursor, like noice's hover
+  })
+  local function grown()
+    return require("spoor.live").expanded[vim.api.nvim_get_current_tabpage()]
+  end
+  H.wait(function()
+    local e = grown()
+    return e and e.graph and e.graph.complete
+  end, 3000, "full bow-tie")
+  vim.wait(200)
+  local e = grown() -- drawn where it fits, or not at all when the hover leaves no room
+  local htop = vim.api.nvim_win_get_position(hover)[1]
+  local hbottom = htop + vim.api.nvim_win_get_height(hover) + 1
+  if e.win:valid() then
+    local top, bottom = rows(e)
+    eq(bottom < htop or top > hbottom, true) -- not under the hover
+    eq(top > cr or bottom < cr, true) -- not on the cursor line
+  end
+  vim.api.nvim_win_close(hover, true)
+end
+
+T["the full bow-tie closes with the hover even without moving"] = function()
+  start()
+  vim.cmd("normal! zz")
+  wait_card()
+  local hover = open_hover(1)
+  H.wait(function()
+    return expanded() ~= nil
+  end, 3000, "full bow-tie")
   vim.api.nvim_win_close(hover, true)
   H.wait(function()
-    local v = card()
-    return v and v.graph and v.graph.complete
-  end, 3000, "card back")
+    return expanded() == nil
+  end, 2000, "folded")
+  wait_card()
+end
+
+T["a hover where the card has nothing to show leaves K alone"] = function()
+  start()
+  vim.cmd("normal! zz")
+  wait_card() -- the card showed Process ...
+  vim.api.nvim_win_set_cursor(0, { 1, 0 }) -- ... then the cursor left it for `package order`
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  vim.wait(200)
+  local hover = open_hover(1)
+  vim.wait(200)
+  eq(expanded(), nil)
+  vim.api.nvim_win_close(hover, true)
 end
 
 T["a sidebar anchored to a window (snacks explorer) does not hide the card"] = function()

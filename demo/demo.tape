@@ -22,9 +22,14 @@ Type "25Gw"
 Sleep 4s
 Show
 
-# Rest on a function: a small card in the corner shows callers and callees.
+# Rest on a function: a small card next to the cursor shows callers and callees.
 Sleep 2.5s
 Type "jfv" Sleep 2.5s
+
+# K: next to the hover, the card grows into the full bow-tie; j folds it back.
+Type "25G0w" Sleep 1.5s
+Type "K" Sleep 3.5s
+Type "j" Sleep 1.5s
 
 # gag: the full bow-tie. Moving through it previews each function in the code above.
 Type "25Gw" Sleep 1.5s

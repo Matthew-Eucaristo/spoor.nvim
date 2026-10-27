@@ -109,6 +109,16 @@ function Win:on(event, cb, opts)
   vim.api.nvim_create_autocmd(event, spec)
 end
 
+--- Close the window but keep the buffer, so show() can bring it back (as snacks does).
+function Win:hide()
+  self:close_help()
+  local win = self.win
+  self.win = nil
+  if win and vim.api.nvim_win_is_valid(win) then
+    pcall(vim.api.nvim_win_close, win, true)
+  end
+end
+
 function Win:close()
   self:close_help()
   local win, buf = self.win, self.buf

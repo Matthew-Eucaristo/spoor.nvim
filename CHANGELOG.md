@@ -1,7 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 - 2026-10-27
 
+- `K` grows the card: when a hover opens at the cursor, the card turns into the full bow-tie (two levels, every row) next to it, in the largest free part of the screen. Moving on folds it back. Works with noice and plain LSP hovers, which open their windows late and without autocommands.
+- Hover detection follows floats anchored to the code window (also nested ones, as noice draws them) that touch the cursor line, so sidebars like the snacks explorer never hide the card.
 - Any language: where no language server has call hierarchy (marksman, ty, or no server at all), a same-file bow-tie from tree-sitter, labelled *syntax only · this file*. Functions and calls are found by node type name, so every parser works without per-language queries. The language server always wins when it can answer; `syntax = false` turns it off.
 - Your own frameworks and entry points: `frameworks = { rule, ... }` and `entries = { name = detector }` take the same shape as the built-in ones; `entries = { npm = false }` turns one off.
 - snacks.nvim is optional: without it spoor uses plain windows and `vim.ui.select` (pickers without previews).

@@ -82,16 +82,95 @@ function M.close_all()
 end
 
 --- The card has nothing to say right now (insert mode, no function, another window or float).
-local function hide_card()
+---@type table<integer, {graph: spoor.Graph, client: vim.lsp.Client, load_opts: spoor.LoadOpts, origin: integer, key?: string}>
+M.last_card = {} -- per tabpage: what the card showed, so K can still grow it after it hid
+
+---@param keep? boolean remember what it showed, for K (only when a hover made it step aside)
+local function hide_card(keep)
   local tab = vim.api.nvim_get_current_tabpage()
   local v = M.panels[tab]
+  M.last_card[tab] = nil
   if v and v.opts.kind == "card" then
+    if keep and v.graph and v.client and v.load_opts then
+      M.last_card[tab] = { graph = v.graph, client = v.client, load_opts = v.load_opts, origin = v.origin }
+    end
     v.closing = true
     v:close()
     M.panels[tab] = nil
   end
 end
 M.hide_card = hide_card
+
+---@type table<integer, spoor.View> per tabpage: the full bow-tie shown next to a hover (K)
+M.expanded = {}
+
+--- Back to the small card: the cursor moved, you started typing, or the hover closed.
+local function collapse()
+  local tab = vim.api.nvim_get_current_tabpage()
+  local e = M.expanded[tab]
+  M.expanded[tab] = nil
+  if e then
+    if e.group then
+      e.group:cancel()
+    end
+    e:close()
+  end
+end
+M.collapse = collapse
+
+--- K opened a hover over the function the card shows: grow the card into the full bow-tie
+--- (callers of callers, callees of callees, more rows) on the other side of the cursor.
+---@param hover integer
+local function expand(hover)
+  local tab = vim.api.nvim_get_current_tabpage()
+  if M.expanded[tab] then
+    return -- already showing (or hidden because the hover leaves no room)
+  end
+  if M.panels[tab] then
+    hide_card(true)
+  end
+  -- or it stepped aside for this hover a moment ago (hovers open their windows one by one)
+  local last = M.last_card[tab]
+  local win = vim.api.nvim_get_current_win()
+  if not (last and last.origin == win and last.graph) then
+    return
+  end
+  local focus = last.graph.nodes[last.graph.focus]
+  local client, opts, origin = last.client, last.load_opts, last.origin
+  collapse()
+  if not (focus and focus.item) then
+    return
+  end
+  local e = view.new({
+    kind = "expanded",
+    max_items = Config.options.float.max_items,
+    actions = M.actions,
+    keys = {},
+    win = {
+      position = "float",
+      relative = "editor",
+      width = 40,
+      height = 4,
+      row = 0,
+      col = 0,
+      border = "rounded",
+      backdrop = false,
+      focusable = false,
+      zindex = 45, -- just under the hover
+      wo = { cursorline = false },
+    },
+  })
+  e.origin, e.hover = origin, hover
+  e:show()
+  M.expanded[tab] = e
+  -- hovers (noice, LSP) size themselves after opening: place again once they settle
+  vim.defer_fn(function()
+    if M.expanded[tab] == e then
+      e:place_expanded()
+    end
+  end, 120)
+  bowtie.load(e, client, focus.item, vim.tbl_extend("force", opts, { depth = Config.for_server(client.name).depth }))
+end
 
 ---@param v spoor.View
 local function own_panel(win)
@@ -103,22 +182,47 @@ local function own_panel(win)
   return false
 end
 
---- Is a hover, signature or diagnostic float open at the cursor? The card steps aside for it.
---- Neovim reports a cursor float as relative to the window the cursor is in, so: a focusable
---- float anchored to the code window. Sidebars (the snacks explorer) anchor to their own window,
---- and decorations like treesitter-context aren't focusable; neither counts.
+--- Is a hover, signature or diagnostic float open at the cursor? Returns it.
+--- Neovim reports cursor floats as relative to the cursor's window, and some plugins nest them
+--- (noice draws a frame anchored to the code window and the text anchored to the frame). So: a
+--- float anchored to the code window, directly or through another float, that touches the
+--- cursor line. Sidebars like the snacks explorer anchor to their own window and don't count.
 ---@param win? integer the code window
+---@return integer? hover window (the outermost one)
 local function cursor_float(win)
   win = win or vim.api.nvim_get_current_win()
-  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local cfg = vim.api.nvim_win_get_config(w)
-    local anchored = cfg.relative == "cursor" or (cfg.relative == "win" and (cfg.bufpos ~= nil or cfg.win == win))
-    if anchored and cfg.focusable ~= false and not own_panel(w) then
-      return true
+  if not vim.api.nvim_win_is_valid(win) then
+    return nil
+  end
+  local cursor = vim.fn.screenpos(win, vim.fn.line(".", win), vim.fn.col(".", win)).row - 1
+  -- screen rows from the configs, not nvim_win_get_position: a new float isn't placed until the
+  -- next redraw on some versions
+  local info = vim.fn.getwininfo(win)[1]
+  local top = { [win] = info.winrow - 1 }
+  local found
+  -- floats can nest: resolve anchors a few levels deep
+  for _ = 1, 3 do
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      local cfg = vim.api.nvim_win_get_config(w)
+      if not top[w] and not own_panel(w) and vim.bo[vim.api.nvim_win_get_buf(w)].filetype ~= "spoor" then
+        local base = cfg.relative == "cursor" and cursor or (cfg.relative == "win" and top[cfg.win])
+        if base then
+          local row = cfg.row
+          if type(row) == "table" then -- older Neovim returns {false, n}
+            row = row[#row]
+          end
+          local t = math.floor(base + (tonumber(row) or 0))
+          top[w] = t
+          if t - 1 <= cursor + 2 and t + vim.api.nvim_win_get_height(w) + 1 >= cursor - 2 then
+            found = found or w
+          end
+        end
+      end
     end
   end
-  return false
+  return found
 end
+M.cursor_float = cursor_float
 
 --- Should spoor follow the cursor in this window?
 ---@param win integer
@@ -287,7 +391,7 @@ function M.update()
       return hide_card()
     end
     if Config.options.live.layout == "cursor" and cursor_float(win) then
-      return hide_card()
+      return expand(cursor_float(win) --[[@as integer]]) -- K: the full bow-tie next to the hover
     end
     if v and v:valid() and v.key == key then
       if v.opts.kind == "card" then
@@ -325,15 +429,7 @@ function M.update()
     if not v then
       return
     end
-    local cached = M.cache_get(key)
-    if cached then
-      if v.group then
-        v.group:cancel()
-      end
-      v.client = client
-      return v:render(cached)
-    end
-    bowtie.load(v, client, item, {
+    local opts = {
       root = util.root(bufnr, client),
       bufnr = bufnr,
       depth = 1,
@@ -343,8 +439,48 @@ function M.update()
           M.cache_put(key, g)
         end
       end,
-    })
+    }
+    local cached = M.cache_get(key)
+    if cached then
+      if v.group then
+        v.group:cancel()
+      end
+      v.client, v.load_opts = client, opts -- K can grow a cached card too
+      return v:render(cached)
+    end
+    bowtie.load(v, client, item, opts)
   end)
+end
+
+--- Look for a hover at the cursor every 50 ms for up to a second, and grow the card when one
+--- shows up. Hovers are often positioned after their window opens (noice waits for the
+--- server's answer and opens windows without autocommands), so one look is not enough.
+local watching
+local function watch_hover()
+  if Config.options.live.layout ~= "cursor" or watching then
+    return
+  end
+  local tries = 0
+  watching = assert(vim.uv.new_timer())
+  watching:start(
+    0,
+    50,
+    vim.schedule_wrap(function()
+      if not watching then
+        return
+      end
+      tries = tries + 1
+      local hover = cursor_float()
+      if hover or tries >= 20 then
+        watching:stop()
+        watching:close()
+        watching = nil
+        if hover then
+          expand(hover)
+        end
+      end
+    end)
+  )
 end
 
 local schedule, cancel_schedule
@@ -354,7 +490,12 @@ function M.setup()
   local group = vim.api.nvim_create_augroup("spoor_live", { clear = true })
   vim.api.nvim_create_autocmd({ "CursorMoved", "BufEnter", "InsertLeave", "LspAttach", "TabEnter" }, {
     group = group,
-    callback = function()
+    callback = function(ev)
+      local e = M.expanded[vim.api.nvim_get_current_tabpage()]
+      -- moving on (j, k, ...) folds the full bow-tie back into the card
+      if e and ev.event == "CursorMoved" and vim.api.nvim_get_current_win() == e.origin then
+        collapse()
+      end
       if M.enabled() and not M.paused then
         schedule()
       end
@@ -368,19 +509,45 @@ function M.setup()
         g:cancel()
       end
       hide_card()
+      collapse()
     end,
   })
   -- a hover or diagnostic float opened at the cursor: hide the card; when it closes, come back
+  -- K (hover) over the card's function: show the full bow-tie next to it. The hover closing
+  -- brings the card back.
+  -- after K (or any pause), a hover may be opening
+  vim.api.nvim_create_autocmd("CursorHold", {
+    group = group,
+    callback = function()
+      local e = M.expanded[vim.api.nvim_get_current_tabpage()]
+      if e and not (e.hover and vim.api.nvim_win_is_valid(e.hover)) then
+        collapse() -- its hover closed without telling anyone (noice closes with noautocmd)
+        if M.enabled() and not M.paused then
+          schedule()
+        end
+        return
+      end
+      if M.enabled() and not M.paused then
+        watch_hover()
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd({ "WinNew", "WinClosed" }, {
     group = group,
     callback = function(ev)
-      vim.schedule(function()
-        if ev.event == "WinNew" and cursor_float() then
-          hide_card()
-        elseif M.enabled() and not M.paused then
-          schedule()
-        end
-      end)
+      local closed = ev.event == "WinClosed" and tonumber(ev.match) or nil
+      if closed then
+        return vim.schedule(function()
+          local e = M.expanded[vim.api.nvim_get_current_tabpage()]
+          if e and closed == e.hover then
+            collapse()
+          end
+          if M.enabled() and not M.paused then
+            schedule()
+          end
+        end)
+      end
+      watch_hover()
     end,
   })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufWritePost" }, {

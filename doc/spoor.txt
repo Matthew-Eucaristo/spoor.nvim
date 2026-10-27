@@ -77,9 +77,14 @@ On a call, the focus is the called function. Anywhere else in a body, it is
 the enclosing function. Requests are debounced (`live.debounce`), stale ones
 are cancelled, finished bow-ties are cached until you edit or save, and
 nothing is sent in insert mode. The card sits just above the cursor line (below
-it near the top of the window), never takes focus, steps aside while a hover,
-signature or diagnostic float is open at the cursor, and hides while you type
-or when the cursor is not in a function. Use |spoor-gag| to interact with it.
+it near the top of the window), never takes focus, and hides while you type or
+when the cursor is not in a function.
+
+When a hover opens at the cursor (|K|, or a signature or diagnostic float), the
+card grows into the full bow-tie (`float.depth` levels, `float.max_items`
+rows) in the largest free part of the screen that covers neither the hover nor
+the cursor line. Moving the cursor, or the hover closing, folds it back. Use
+|spoor-gag| to interact with the bow-tie.
 
 <leader>uB          Toggle the live bow-tie. The choice persists across
                     sessions. `:q` in the panel pauses it for this session;

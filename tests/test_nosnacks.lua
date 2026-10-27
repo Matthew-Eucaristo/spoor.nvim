@@ -157,4 +157,33 @@ T["pickers go through vim.ui.select"] = function()
   eq(vim.api.nvim_win_get_cursor(0)[1], 3)
 end
 
+T["K grows the card without snacks too, and a hover with no room left is fine"] = function()
+  start()
+  vim.cmd("normal! zz")
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  H.wait(function()
+    return shown(panel())
+  end, 3000, "card")
+  vim.cmd("redraw")
+  local buf = vim.api.nvim_create_buf(false, true)
+  local hover = vim.api.nvim_open_win(buf, false, { relative = "cursor", row = 1, col = 0, width = 30, height = 3 })
+  H.wait(function()
+    local e = require("spoor.live").expanded[vim.api.nvim_get_current_tabpage()]
+    return e and e.graph and e.graph.complete
+  end, 3000, "full bow-tie")
+  vim.api.nvim_win_close(hover, true)
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  -- now a hover that leaves no room at all
+  vim.cmd("normal! zz")
+  H.wait(function()
+    return shown(panel())
+  end, 3000, "card again")
+  vim.cmd("redraw")
+  hover = vim.api.nvim_open_win(buf, false, { relative = "editor", row = 0, col = 0, width = vim.o.columns, height = vim.o.lines - 3 })
+  vim.api.nvim_win_set_config(hover, { relative = "cursor", row = -(vim.fn.winline() - 1), col = 0 })
+  vim.wait(500)
+  vim.api.nvim_win_close(hover, true)
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+end
+
 return T
