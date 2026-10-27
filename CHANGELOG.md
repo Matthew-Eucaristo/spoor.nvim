@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.1 - 2026-10-28
 
 - Tree-sitter fallback (lua_ls and other servers without call hierarchy): on a call to a function in another file, the card, `K` and `gag` now show that function, found through go-to-definition, instead of the function around the cursor. The call you are on counts as one of its callers, and the label names the file (`syntax only · graph.lua`).
 
