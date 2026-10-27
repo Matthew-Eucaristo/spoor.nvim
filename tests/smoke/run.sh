@@ -16,6 +16,10 @@ export SPOOR_REPO=$repo SPOOR_SMOKE_CONFIG=$config SPOOR_SMOKE_RESULT=$home/resu
 mkdir -p "$XDG_CONFIG_HOME/nvim"
 cp "$repo/tests/smoke/init_$config.lua" "$XDG_CONFIG_HOME/nvim/init.lua"
 
+if [ -z "${SPOOR_URL:-}" ]; then
+  # lazy.nvim generates help tags for plugins it clones, not for a local `dir`; do it here
+  "$nvim" --clean --headless -c "helptags $repo/doc" -c q
+fi
 if [ "$config" = lazy ] || [ "$config" = lazyvim ]; then
   "$nvim" --headless "+Lazy! sync" +qa >"$home/install.log" 2>&1 || { cat "$home/install.log"; exit 1; }
 fi
