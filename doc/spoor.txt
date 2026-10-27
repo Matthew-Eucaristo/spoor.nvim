@@ -49,8 +49,9 @@ With Neovim 0.12's |vim.pack|: >lua
     })
     require("spoor").setup()
 <
-Any other way: put spoor and snacks.nvim on 'runtimepath' and call
-`require("spoor").setup()`. Without it only |:Spoor| exists.
+Any other way: put spoor and snacks.nvim on 'runtimepath', run
+`:helptags ALL` once, and call `require("spoor").setup()`. Without it only
+|:Spoor| exists.
 
 Run |:checkhealth| `spoor` to see what each attached server supports.
 

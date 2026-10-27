@@ -35,4 +35,4 @@ Tests run headless with [mini.test](https://github.com/nvim-mini/mini.nvim). LSP
 
 ## Recording the demo
 
-`demo/capture.sh` drives the throwaway LazyVim through `nvim --embed`, renders frames with JetBrains Mono and the Nerd Font symbols in headless Chrome, and writes `demo/hero.gif`. It needs node, ffmpeg, Google Chrome and gopls. Fonts and npm packages are downloaded into `.tests/capture`.
+`vhs demo/demo.tape` re-records `demo/demo.gif` from the repository root. The tape runs `demo/run.sh` (a throwaway LazyVim on the synthetic shop repo from `demo/setup.sh`) under a temporary `HOME` (`demo/vhs-env.sh`), so no frame shows anything about your machine. It needs [VHS](https://github.com/charmbracelet/vhs), gopls and JetBrainsMono Nerd Font (`brew install --cask font-jetbrains-mono-nerd-font`). Check every frame before committing a new GIF, and keep it under about 1 MB.

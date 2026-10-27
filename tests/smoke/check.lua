@@ -124,6 +124,12 @@ local ok, err = xpcall(function()
   end
   vim.wait(100)
 
+  -- the help file is installed and indexed
+  if not pcall(vim.cmd, "help spoor") then
+    fail(":h spoor not found")
+  end
+  pcall(vim.cmd, "helpclose")
+
   -- health names this buffer's server
   vim.api.nvim_set_current_win(code_win)
   vim.cmd("checkhealth spoor")
@@ -146,7 +152,13 @@ local ok, err = xpcall(function()
   end
   local msgs = vim.api.nvim_exec2("messages", { output = true }).output
   for line in msgs:gmatch("[^\n]+") do
-    if line:find("^E%d+:") or line:find("Error") or line:find("stack traceback") then
+    if
+      line:find("^E%d+:")
+      or line:find("Error")
+      or line:find("stack traceback")
+      or line:find("not installed") -- lazy.nvim: a spec names a plugin that isn't there
+      or line:find("missing plugins")
+    then
       fail("message: " .. line)
     end
   end

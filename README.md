@@ -2,7 +2,7 @@
 
 Follow the trail through a codebase without leaving LazyVim. spoor shows who calls the function under your cursor and what it calls, keeps the path you walked with your notes, and tells you which functions your coding agent just added that nothing calls yet. It uses your language server and git, with no AI and no index to build.
 
-![spoor: the live bow-tie, the deeper float, a trace with a note, and the changed-symbols picker](demo/hero.gif)
+![spoor: the live bow-tie, the deeper float, a trace with a note, and the changed-symbols picker](demo/demo.gif)
 
 A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the same way: pick a focus, look at its neighbours, follow one path, and write down what they learn. The slow part is not following calls but losing the trail. spoor makes that cheap:
 
@@ -44,7 +44,7 @@ require("spoor").setup()
 
 ### Any other way
 
-Put spoor and snacks.nvim on your `runtimepath` (for example, `git clone` both into `~/.local/share/nvim/site/pack/plugins/start/`) and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys and no live panel.
+Put spoor and snacks.nvim on your `runtimepath` (for example, `git clone` both into `~/.local/share/nvim/site/pack/plugins/start/`), run `:helptags ALL` once so `:h spoor` works, and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys and no live panel.
 
 ### Why not Homebrew?
 
@@ -204,7 +204,7 @@ make e2e      # real gopls and vtsls/tsgo on tests/fixtures
 make smoke    # spoor inside real configs: no plugin manager, plain lazy.nvim, stock LazyVim
 make lint     # stylua --check
 demo/run.sh   # a throwaway LazyVim (all state under .tests/demo) with this checkout on a demo repo
-demo/capture.sh  # re-record demo/hero.gif from that LazyVim (needs node, ffmpeg, Chrome)
+vhs demo/demo.tape  # re-record demo/demo.gif (needs vhs, gopls, JetBrainsMono Nerd Font)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). spoor is MIT licensed.
