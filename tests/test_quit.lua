@@ -27,6 +27,7 @@ for _, layout in ipairs({ "cursor", "bottom" }) do
     { "code", "qa" },
     { "code+trail", "q" },
     { "code+trail", "wq" },
+    { "code+pinned", "q" },
   }) do
     T[("%s: %s from the %s window exits"):format(layout, case[2], case[1])] = function()
       eq(quit(case[1], case[2], layout), 0)

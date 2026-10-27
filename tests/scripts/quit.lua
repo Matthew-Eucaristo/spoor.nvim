@@ -24,6 +24,17 @@ if where == "trace" then
   vim.api.nvim_set_current_win(s.win.win)
 elseif where == "code+trail" then
   vim.api.nvim_set_current_win(code)
+  require("spoor.live").close_all() -- e.g. the card hid itself: no live view while the trail is open
+elseif where == "code+pinned" then
+  vim.api.nvim_set_current_win(code)
+  require("spoor.trace").close()
+  require("spoor").bowtie()
+  H.wait(function()
+    local v = require("spoor.bowtie").current
+    return v and v:valid() and v.graph and v.graph.complete
+  end, 3000, "float")
+  require("spoor.bowtie").float_actions.pin_right(require("spoor.bowtie").current)
+  vim.api.nvim_set_current_win(code)
 elseif where == "panel" then
   vim.api.nvim_set_current_win(require("spoor.live").panels[vim.api.nvim_get_current_tabpage()].win.win)
 else

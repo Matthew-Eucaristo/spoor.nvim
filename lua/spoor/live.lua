@@ -359,40 +359,46 @@ function M.setup()
       M.generation = M.generation + 1
     end,
   })
-  -- Don't keep Neovim open just for the panel.
+  -- Don't keep Neovim open just for spoor's windows (card, panel, trail, a pinned bow-tie).
   vim.api.nvim_create_autocmd("QuitPre", {
     group = group,
     callback = function()
       local tab = vim.api.nvim_get_current_tabpage()
       local v = M.panels[tab]
-      if not (v and v:valid()) then
-        return
-      end
       local cur = vim.api.nvim_get_current_win()
-      if cur == v.win.win then
+      if v and v:valid() and cur == v.win.win then
         v.user_quit = true -- :q in the panel itself
         return
       end
-      -- :q in the trail window closes just that; :qa from there quits everything by itself.
+      -- :q in another spoor window closes just that; :qa from there quits everything by itself.
       -- Closing the current window here would make Neovim abandon the quit.
       if vim.bo[vim.api.nvim_win_get_buf(cur)].filetype == "spoor" then
         return
       end
-      local code = 0
+      local code, ours = 0, {}
       for _, w in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
         local buf = vim.api.nvim_win_get_buf(w)
-        if vim.api.nvim_win_get_config(w).relative == "" and vim.bo[buf].filetype ~= "spoor" then
+        if vim.bo[buf].filetype == "spoor" then
+          ours[#ours + 1] = w
+        elseif vim.api.nvim_win_get_config(w).relative == "" then
           code = code + 1
         end
       end
       if code <= 1 then
-        v.closing = true
-        v:close()
+        if v and v:valid() then
+          v.closing = true
+        end
         M.panels[tab] = nil
         require("spoor.trace").close()
+        for _, w in ipairs(ours) do
+          if vim.api.nvim_win_is_valid(w) then
+            pcall(vim.api.nvim_win_close, w, true)
+          end
+        end
       end
     end,
   })
+
   vim.api.nvim_create_autocmd({ "VimResized", "WinResized" }, {
     group = group,
     callback = function()
