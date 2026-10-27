@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Tree-sitter fallback (lua_ls and other servers without call hierarchy): on a call to a function in another file, the card, `K` and `gag` now show that function, found through go-to-definition, instead of the function around the cursor. The call you are on counts as one of its callers, and the label names the file (`syntax only · graph.lua`).
+
 ## 2.0.0 - 2026-10-27
 
 - Out of the way by default: nothing shows while you move. `K` shows the full bow-tie next to the hover at once (also before any card); resting the cursor on a function for `live.card.delay` (5 s) shows the small card. `live.hover = false` and `card = { delay = false }` turn them off.

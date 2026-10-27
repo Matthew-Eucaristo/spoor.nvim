@@ -239,9 +239,9 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
   retry = M.retry,
   reroot = function(v)
     local node = v:node_at_cursor()
-    if node and v.graph and v.graph.source == "syntax" and not node.tags.outside then
-      local pos = node.selection.start
-      return syntax.at(vim.uri_to_bufnr(node.uri), { pos.line, pos.character }, function(g)
+    if node and v.graph and v.graph.source == "syntax" then
+      -- a callee from another file is followed from its call site (go-to-definition)
+      return syntax.at_file(node.uri, node.selection.start, "utf-8", function(g)
         if g and v:valid() then
           v.history = v.history or {}
           table.insert(v.history, v.graph)

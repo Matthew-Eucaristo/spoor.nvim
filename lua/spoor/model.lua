@@ -43,6 +43,7 @@ M.VERSION = 1
 ---@field root? string
 ---@field expanded table<string, boolean>
 ---@field source? "lsp"|"syntax" syntax: built from tree-sitter, this file only
+---@field scope? string syntax: the file it was built from, when not the one you are in
 ---@field complete? boolean
 
 ---@param item lsp.CallHierarchyItem

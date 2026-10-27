@@ -1,8 +1,9 @@
 --- Same-file bow-tie from tree-sitter, for buffers whose language server has no call
 --- hierarchy (or that have no server at all). Generic: functions and calls are found by
 --- node type name ("function", "method", "call", "invocation", ...), so any tree-sitter
---- parser works without per-language queries. Labelled "syntax only · this file"; the
---- language server always wins when it can answer.
+--- parser works without per-language queries. On a call to a function in another file, a
+--- server's go-to-definition (lua_ls has one) leads to that file. Labelled "syntax only ·
+--- this file" (or that file's name); the language server always wins when it can answer.
 local model = require("spoor.model")
 local util = require("spoor.util")
 
@@ -210,7 +211,10 @@ end
 ---@field sel integer[] {row, col, end_row, end_col} of the name
 
 ---@class spoor.SyntaxIndex
----@field tick integer
+---@field src integer|string the buffer, or the text of a file that is not loaded
+---@field uri string
+---@field project? string the project root, for file text
+---@field tick? integer
 ---@field lang string
 ---@field l spoor.SyntaxLang
 ---@field root TSNode
@@ -224,13 +228,15 @@ end
 local cache = {}
 
 --- Index the named functions of one tree (cached per buffer, edit and language tree).
----@param buf integer
+---@param src integer|string a buffer, or a file's text
 ---@param lang string
 ---@param root TSNode
+---@param o {uri: string, project?: string}
 ---@return spoor.SyntaxIndex?
-local function index(buf, lang, root)
-  local tick = vim.b[buf].changedtick
-  local c = cache[buf]
+local function index(src, lang, root, o)
+  local buf = type(src) == "number" and src or nil
+  local tick = buf and vim.b[buf].changedtick
+  local c = buf and cache[buf]
   if c and c.tick == tick and c.lang == lang and c.root:equal(root) then
     return c
   end
@@ -239,19 +245,22 @@ local function index(buf, lang, root)
     return nil
   end
   local idx = {
+    src = src,
+    uri = o.uri,
+    project = o.project,
     tick = tick,
     lang = lang,
     l = l,
     root = root,
-    lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false),
+    lines = buf and vim.api.nvim_buf_get_lines(buf, 0, -1, false) or vim.split(src --[[@as string]], "\n"),
     defs = {},
     by_key = {},
     by_id = {},
     names = {},
   }
-  for _, node in l.defs:iter_captures(root, buf) do
+  for _, node in l.defs:iter_captures(root, src) do
     local n = name_node(node, l)
-    local name = n and vim.trim(text(n, buf))
+    local name = n and vim.trim(text(n, src))
     local key = name and not name:find("\n") and key_of(name)
     if key then
       local sr, sc, er, ec = n:range()
@@ -269,7 +278,9 @@ local function index(buf, lang, root)
       cache[b] = nil
     end
   end
-  cache[buf] = idx
+  if buf then
+    cache[buf] = idx
+  end
   return idx
 end
 
@@ -335,14 +346,13 @@ local function callee_label(t, key)
   return key
 end
 
---- Build a bow-tie for the function `def`: callees inside it, callers anywhere in this file.
+--- Build a bow-tie for the function `def`: callees inside it, callers anywhere in its file.
 ---@param idx spoor.SyntaxIndex
----@param buf integer
 ---@param def spoor.SyntaxDef
 ---@return spoor.Graph
-local function build(idx, buf, def)
-  local uri = vim.uri_from_bufnr(buf)
-  local root = util.root(buf)
+local function build(idx, def)
+  local buf, uri = idx.src, idx.uri
+  local root = idx.project or util.root(buf --[[@as integer]])
   local focus = def_node(def, uri)
   local g = model.graph(focus, { root = root })
   g.source, g.encoding, g.complete = "syntax", "utf-8", true
@@ -443,17 +453,23 @@ local function build(idx, buf, def)
 end
 
 --- The language tree and its root under a position, once parsed.
----@param buf integer
+---@param src integer|string a buffer, or a file's text in language `lang`
 ---@param pos integer[] {row, col} 0-based
+---@param lang? string
 ---@param cb fun(lang: string?, root: TSNode?)
-local function tree_at(buf, pos, cb)
-  local ok, parser = pcall(vim.treesitter.get_parser, buf, nil, { error = false })
+local function tree_at(src, pos, lang, cb)
+  local ok, parser
+  if type(src) == "string" then
+    ok, parser = pcall(vim.treesitter.get_string_parser, src, lang)
+  else
+    ok, parser = pcall(vim.treesitter.get_parser, src, nil, { error = false })
+  end
   if not ok or not parser then
     return cb(nil)
   end
   local r = { pos[1], pos[2], pos[1], pos[2] }
   local function done()
-    if not vim.api.nvim_buf_is_valid(buf) then
+    if type(src) == "number" and not vim.api.nvim_buf_is_valid(src) then
       return cb(nil)
     end
     local lt = parser:language_for_range(r)
@@ -474,41 +490,141 @@ local function tree_at(buf, pos, cb)
   end)
 end
 
+--- Where a server's go-to-definition puts the name at `pos`, when one can tell.
+---@param buf integer
+---@param pos integer[] {row, col} 0-based, byte column
+---@param cb fun(uri?: string, pos?: lsp.Position, encoding?: string)
+local function definition(buf, pos, cb)
+  local lsp = require("spoor.lsp")
+  local client = lsp.client(buf, "textDocument/definition")
+  if not client then
+    return cb()
+  end
+  local line = vim.api.nvim_buf_get_lines(buf, pos[1], pos[1] + 1, false)[1] or ""
+  local ok, character = pcall(vim.str_utfindex, line, client.offset_encoding, pos[2], false)
+  local params = {
+    textDocument = { uri = vim.uri_from_bufnr(buf) },
+    position = { line = pos[1], character = ok and character or pos[2] },
+  }
+  lsp.request(client, "textDocument/definition", params, { bufnr = buf }, function(err, result)
+    local loc = not err and result and (result.uri or result.targetUri) and result or (result or {})[1]
+    if not loc or not vim.api.nvim_buf_is_valid(buf) then
+      return cb()
+    end
+    local r = loc.targetSelectionRange or loc.targetRange or loc.range
+    cb(loc.uri or loc.targetUri, r and r.start, client.offset_encoding)
+  end)
+end
+
+local function inside(sel, pos)
+  return (pos[1] > sel[1] or (pos[1] == sel[1] and pos[2] >= sel[2]))
+    and (pos[1] < sel[3] or (pos[1] == sel[3] and pos[2] <= sel[4]))
+end
+
+---@param src integer|string
+---@param pos integer[] {row, col} 0-based, byte column
+---@param o {uri: string, lang?: string, project?: string, exact?: boolean}
+---@param cb fun(g: spoor.Graph?)
+local function at(src, pos, o, cb)
+  tree_at(src, pos, o.lang, function(lang, root)
+    if not (lang and root) or (type(src) == "number" and not vim.api.nvim_buf_is_valid(src)) then
+      return cb(nil)
+    end
+    local idx = index(src, lang, root, o)
+    if not idx then
+      return cb(nil)
+    end
+    if o.exact then -- where go-to-definition pointed: a function named there, or nothing
+      for _, d in ipairs(idx.defs) do
+        if inside(d.sel, pos) then
+          return cb(build(idx, d))
+        end
+      end
+      return cb(nil)
+    end
+    local node = root:named_descendant_for_range(pos[1], pos[2], pos[1], pos[2])
+    if not node then
+      return cb(nil)
+    end
+    -- on a call to a function of this file, or on a function's name: that function
+    local key = key_of(text(node, src))
+    local hits = key and idx.by_key[key]
+    if hits and (is_callee(idx, node) or idx.names[table.concat({ node:range() }, ":", 1, 2)]) then
+      local def = hits[1]
+      for _, d in ipairs(hits) do
+        if d.sel[1] == pos[1] and d.sel[2] <= pos[2] and pos[2] <= d.sel[4] then
+          def = d
+        end
+      end
+      return cb(build(idx, def))
+    end
+    local around = enclosing(idx, node)
+    local function fallback()
+      cb(around and build(idx, around) or nil)
+    end
+    if not (key and type(src) == "number" and is_callee(idx, node)) then
+      return fallback()
+    end
+    -- on a call to a function defined elsewhere: follow go-to-definition there
+    definition(src, pos, function(uri, dpos, encoding)
+      if not uri then
+        return fallback()
+      end
+      M.at_file(uri, dpos, encoding, function(g)
+        if not g then
+          return fallback()
+        end
+        if around and uri ~= o.uri then -- the call you are on is one of its callers
+          local caller = model.add_node(g, def_node(around, o.uri))
+          local site = range({ node:range() })
+          model.add_edge(g, { from = caller.id, to = g.focus, kind = "call", sites = { site }, source = "syntax" })
+        end
+        cb(g)
+      end, { exact = true, project = idx.project or util.root(src) })
+    end)
+  end)
+end
+
 --- Build the same-file bow-tie at a position: the function there (or the one it calls).
 ---@param buf integer
 ---@param pos integer[] {row, col} 0-based, byte column
 ---@param cb fun(g: spoor.Graph?)
 function M.at(buf, pos, cb)
-  tree_at(buf, pos, function(lang, root)
-    if not (lang and root) or not vim.api.nvim_buf_is_valid(buf) then
-      return cb(nil)
+  at(buf, pos, { uri = vim.uri_from_bufnr(buf) }, cb)
+end
+
+--- The bow-tie at a position in any file: its buffer when loaded, else its text (no buffer is
+--- created for it).
+---@param uri string
+---@param pos lsp.Position
+---@param encoding? string of `pos.character` ("utf-8" for spoor's own syntax graphs)
+---@param cb fun(g: spoor.Graph?)
+---@param opts? {exact?: boolean, project?: string}
+function M.at_file(uri, pos, encoding, cb, opts)
+  opts = opts or {}
+  local path = util.path(uri)
+  local inner = cb
+  cb = function(g)
+    -- name the file when it is not the one in the code window ("syntax only · store.lua")
+    local win = util.code_window(vim.api.nvim_get_current_win())
+    if g and not (win and vim.uri_from_bufnr(vim.api.nvim_win_get_buf(win)) == g.nodes[g.focus].uri) then
+      g.scope = vim.fs.basename(path)
     end
-    local idx = index(buf, lang, root)
-    if not idx then
-      return cb(nil)
-    end
-    local node = root:named_descendant_for_range(pos[1], pos[2], pos[1], pos[2])
-    local def
-    if node then
-      -- on a call to a function of this file, or on a function's name: that function
-      local key = key_of(text(node, buf))
-      local hits = key and idx.by_key[key]
-      if hits and (is_callee(idx, node) or idx.names[table.concat({ node:range() }, ":", 1, 2)]) then
-        def = hits[1]
-        for _, d in ipairs(hits) do
-          if d.sel[1] == pos[1] and d.sel[2] <= pos[2] and pos[2] <= d.sel[4] then
-            def = d
-          end
-        end
-      else
-        def = enclosing(idx, node)
-      end
-    end
-    if not def then
-      return cb(nil)
-    end
-    cb(build(idx, buf, def))
-  end)
+    inner(g)
+  end
+  local buf = vim.fn.bufnr(path)
+  local lines = util.read_lines(path, 20000)
+  local p = { pos.line, util.byte_col(lines[pos.line + 1] or "", pos.character, encoding) }
+  local o = { uri = uri, exact = opts.exact, project = opts.project }
+  if buf > 0 and vim.api.nvim_buf_is_loaded(buf) then
+    return at(buf, p, o, cb)
+  end
+  local ft = #lines > 0 and vim.filetype.match({ filename = path, contents = lines })
+  o.lang = ft and vim.treesitter.language.get_lang(ft)
+  if not o.lang then
+    return cb(nil)
+  end
+  at(table.concat(lines, "\n"), p, o, cb)
 end
 
 --- The same-file bow-tie at a window's cursor.

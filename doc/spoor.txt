@@ -234,8 +234,10 @@ Functions and calls are found by node type name ("function", "method",
 without per-language queries. Callees are the calls inside the function;
 callers are the uses of its name in the same file, grouped by the function
 around each use. Callees defined elsewhere are dimmed and jump to the call
-site. The bow-tie says "syntax only · this file", `.` re-roots within the
-file, and |spoor-gat| needs a language server. Parsing is asynchronous and the
+site. On a call to a function in another file, a server's go-to-definition
+(lua_ls has one) leads to that file; the call you are on counts among its
+callers. The bow-tie says "syntax only · this file" (or that file's name),
+`.` re-roots, and |spoor-gat| needs a language server. Parsing is asynchronous and the
 index is rebuilt once per edit. A server that can answer always wins;
 `syntax = false` turns the fallback off.
 

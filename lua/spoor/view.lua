@@ -279,7 +279,9 @@ function View:decorate(r)
       -- the card is a glance; say where the rest is
       footer = {
         {
-          " " .. (self.graph.source == "syntax" and "syntax only · this file" or self.graph.server or "lsp") .. " · ",
+          " "
+            .. (self.graph.source == "syntax" and ("syntax only · " .. (self.graph.scope or "this file")) or self.graph.server or "lsp")
+            .. " · ",
           "SpoorDim",
         },
         { "gag", "SpoorKey" },

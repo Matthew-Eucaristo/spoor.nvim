@@ -95,6 +95,49 @@ T["lua: inside a body the enclosing function is the focus; on a call, the callee
   eq(graph_here(), nil)
 end
 
+--- A server with go-to-definition but no call hierarchy (lua_ls), pointing `save` at `at`.
+local function definition_server(bufnr, at)
+  return H.fake_server(bufnr, {
+    name = "defonly",
+    root = dir,
+    capabilities = { definitionProvider = true },
+    handlers = {
+      ["textDocument/definition"] = function()
+        return at and { uri = vim.uri_from_fname(dir .. "/store.lua"), range = { start = at, ["end"] = at } }
+      end,
+    },
+  })
+end
+
+T["lua: on a call to another file's function, that function (through go-to-definition)"] = function()
+  local bufnr = open("shop.lua", "return save(order)", "save")
+  require("spoor.config").setup({})
+  local server = definition_server(bufnr, { line = 7, character = 11 })
+  local g = graph_here()
+  eq(g.nodes[g.focus].name, "M.save")
+  eq(g.nodes[g.focus].uri, vim.uri_from_fname(dir .. "/store.lua"))
+  eq(g.scope, "store.lua")
+  eq(names(g, "out"), { "encode" })
+  eq(names(g, "in"), { "M.process call ×1", "M.save_all call ×1" }) -- and the call you are on
+  eq(#server.requests, 1)
+  eq(vim.fn.bufnr(dir .. "/store.lua"), -1) -- read, not opened as a buffer
+end
+
+T["lua: a definition that is no function, or none, keeps the function around the cursor"] = function()
+  local bufnr = open("shop.lua", "return save(order)", "save")
+  require("spoor.config").setup({})
+  definition_server(bufnr, { line = 17, character = 6 }) -- `local count`
+  eq(graph_here().nodes[graph_here().focus].name, "M.process")
+  eq(graph_here().scope, nil)
+  for _, c in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+    c:stop(true)
+  end
+  H.wait(function()
+    return #vim.lsp.get_clients({ bufnr = bufnr }) == 0
+  end, 2000, "server stopped")
+  eq(graph_here().nodes[graph_here().focus].name, "M.process") -- no server at all
+end
+
 T["c: function definitions through declarators"] = function()
   open("stats.c", "int total(", "total")
   require("spoor.config").setup({})
