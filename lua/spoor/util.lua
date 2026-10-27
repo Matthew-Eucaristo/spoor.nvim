@@ -22,16 +22,34 @@ function M.root(bufnr, client)
   return git or vim.fn.getcwd()
 end
 
+M.windows = vim.fn.has("win32") == 1
+
+--- Forward slashes and an upper-case drive letter on Windows paths ("c:\\a\\b" -> "C:/a/b"), so
+--- paths from language servers, git and Neovim compare equal. Other paths are returned as is.
+---@param path string
+function M.normalize(path)
+  if M.windows or path:find("^%a:[\\/]") or path:find("^\\\\") then
+    path = path:gsub("\\", "/"):gsub("^%a:", string.upper)
+  end
+  return path
+end
+
 ---@param path string
 ---@param root? string
 ---@return string rel, boolean inside
 function M.relative(path, root)
+  path = M.normalize(path)
   if root and root ~= "" then
-    root = root:gsub("/$", "")
-    if path == root then
+    root = M.normalize(root):gsub("/$", "")
+    -- Windows paths are case-insensitive
+    local p, r = path, root
+    if r:find("^%a:/") then
+      p, r = p:lower(), r:lower()
+    end
+    if p == r then
       return ".", true
     end
-    if path:sub(1, #root + 1) == root .. "/" then
+    if p:sub(1, #r + 1) == r .. "/" then
       return path:sub(#root + 2), true
     end
   end

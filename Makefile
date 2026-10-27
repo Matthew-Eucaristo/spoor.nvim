@@ -17,9 +17,9 @@ test: $(DEPS)
 e2e: $(DEPS)
 	@$(call RUN,tests/e2e,e2e)
 
-# spoor in real configs (minimal, plain lazy.nvim, stock LazyVim) on $(NVIM)
+# spoor in real configs (minimal, no snacks.nvim, plain lazy.nvim, stock LazyVim) on $(NVIM)
 smoke: $(DEPS)
-	for c in minimal lazy lazyvim; do NVIM=$(NVIM) tests/smoke/run.sh $$c || exit 1; done
+	for c in minimal nosnacks lazy lazyvim; do NVIM=$(NVIM) tests/smoke/run.sh $$c || exit 1; done
 
 lint:
 	stylua --check lua plugin tests bench lazy.lua

@@ -208,7 +208,7 @@ T["<CR> in the panel jumps the code window"] = function()
   eq(node.name, "Emit")
   v:jump(node)
   eq(vim.api.nvim_get_current_win(), code_win)
-  eq(vim.api.nvim_buf_get_name(0), w.emit.uri:gsub("^file://", ""))
+  eq(vim.fs.normalize(vim.api.nvim_buf_get_name(0)), vim.fs.normalize(vim.uri_to_fname(w.emit.uri)))
 end
 
 return T

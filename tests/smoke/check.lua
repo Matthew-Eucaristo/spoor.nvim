@@ -1,7 +1,7 @@
 -- Runs inside a real config (see run.sh): loads spoor the way that config does, drives the
 -- live panel, gag, gat and :checkhealth against the in-process fake server on the Go
--- fixture, checks the keys, then quits with the panel open. Writes OK or the failures to
--- $SPOOR_SMOKE_RESULT.
+-- fixture, the tree-sitter bow-tie on a C file without a server, checks the keys, then quits
+-- with the panel open. Writes OK or the failures to $SPOOR_SMOKE_RESULT.
 local repo = os.getenv("SPOOR_REPO")
 local result = os.getenv("SPOOR_SMOKE_RESULT")
 package.path = repo .. "/?.lua;" .. repo .. "/?/init.lua;" .. package.path
@@ -115,16 +115,48 @@ local ok, err = xpcall(function()
   end, 5000, "trace panel")
   require("spoor.trace").close()
 
-  -- pickers are Snacks.picker, whichever picker the config uses elsewhere
+  -- pickers are Snacks.picker, whichever picker the config uses elsewhere; without snacks,
+  -- vim.ui.select
   vim.api.nvim_set_current_win(code_win)
-  require("spoor").entries()
-  wait(function()
-    return vim.bo.filetype == "snacks_picker_input"
-  end, 5000, "entries picker")
-  for _, p in ipairs(Snacks.picker.get()) do
-    p:close()
+  local snacks = require("spoor.ui").snacks()
+  if (os.getenv("SPOOR_SMOKE_CONFIG") == "nosnacks") == snacks then
+    fail("snacks.nvim " .. (snacks and "is loaded" or "is missing"))
+  end
+  if snacks then
+    require("spoor").entries()
+    wait(function()
+      return vim.bo.filetype == "snacks_picker_input"
+    end, 5000, "entries picker")
+    for _, p in ipairs(Snacks.picker.get()) do
+      p:close()
+    end
+  else
+    local select, picked = vim.ui.select, nil
+    vim.ui.select = function(items, opts, cb)
+      picked = opts.prompt .. ": " .. opts.format_item(items[1])
+      cb(nil)
+    end
+    require("spoor").entries()
+    vim.ui.select = select
+    if not (picked and picked:find("main", 1, true)) then
+      fail("entries through vim.ui.select: " .. tostring(picked))
+    end
   end
   vim.wait(100)
+
+  -- no language server: the tree-sitter bow-tie, labelled as such
+  vim.api.nvim_set_current_win(code_win)
+  vim.cmd("edit " .. vim.fn.fnameescape(repo .. "/tests/fixtures/syntax/stats.c"))
+  local c_buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_win_set_cursor(code_win, { 5, 5 }) -- int total(
+  vim.api.nvim_exec_autocmds("CursorMoved", {})
+  wait(function()
+    local v = live.panels[vim.api.nvim_get_current_tabpage()]
+    return v and v:valid() and v.graph and v.graph.source == "syntax" and panel_text():find("add", 1, true) ~= nil
+  end, 5000, "syntax bow-tie on a C file")
+  vim.api.nvim_win_set_buf(code_win, bufnr)
+  vim.api.nvim_win_set_cursor(code_win, { p.line + 1, p.character })
+  pcall(vim.api.nvim_buf_delete, c_buf, { force = true })
 
   -- the help file is installed and indexed
   if not pcall(vim.cmd, "help spoor") then

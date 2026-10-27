@@ -3,6 +3,7 @@ local Config = require("spoor.config")
 local graph = require("spoor.graph")
 local lsp = require("spoor.lsp")
 local resolve = require("spoor.resolve")
+local syntax = require("spoor.syntax")
 local util = require("spoor.util")
 local view = require("spoor.view")
 
@@ -238,6 +239,17 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
   retry = M.retry,
   reroot = function(v)
     local node = v:node_at_cursor()
+    if node and v.graph and v.graph.source == "syntax" and not node.tags.outside then
+      local pos = node.selection.start
+      return syntax.at(vim.uri_to_bufnr(node.uri), { pos.line, pos.character }, function(g)
+        if g and v:valid() then
+          v.history = v.history or {}
+          table.insert(v.history, v.graph)
+          v.placed = nil
+          v:render(g)
+        end
+      end)
+    end
     if node and node.item and v.client then
       v.history = v.history or {}
       table.insert(v.history, v.graph)
@@ -259,7 +271,7 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
   end,
   trace = function(v)
     local node = v:node_at_cursor() or (v.graph and v.graph.nodes[v.graph.focus])
-    if node then
+    if node and view.can_trace(v) then
       v.keep = true
       v:close()
       require("spoor.trace").start(node, { client = v.client, root = v.graph.root })
@@ -294,50 +306,72 @@ M.pinned_keys = vim.tbl_extend("force", view.keys, {
   ["q"] = { "close", desc = "Close" },
 })
 
+--- A new float for the bow-tie at `win`'s cursor, replacing the one open; nil when the answer
+--- came too late (you moved on) or found no function.
+---@param win integer
+---@param found boolean
+---@return spoor.View?
+local function float_for(win, found)
+  -- a slow server must not steal focus after you moved on
+  if vim.api.nvim_get_current_win() ~= win or vim.api.nvim_get_mode().mode:sub(1, 1) ~= "n" then
+    return nil
+  end
+  if M.current and M.current:valid() then
+    M.current:close()
+  end
+  if not found then
+    return util.notify("No function at the cursor", vim.log.levels.WARN)
+  end
+  local v = view.new({
+    kind = "float",
+    max_items = Config.options.float.max_items,
+    actions = M.float_actions,
+    keys = M.float_keys,
+    win = {
+      position = "float",
+      width = Config.options.float.width,
+      height = 8,
+      border = "rounded",
+      backdrop = false,
+      enter = true,
+      zindex = 45,
+    },
+  })
+  v.origin = win
+  v:show()
+  follow(v)
+  M.current = v
+  return v
+end
+
 --- The on-demand float at the cursor (gag).
 function M.open()
   local win = vim.api.nvim_get_current_win()
   local bufnr = vim.api.nvim_get_current_buf()
   local client = lsp.client(bufnr)
-  if not client then
-    return util.notify("No language server with call hierarchy for this buffer", vim.log.levels.WARN)
-  end
-  local root = util.root(bufnr, client)
   if M.open_group then
     M.open_group:cancel()
   end
   M.open_group = lsp.group()
-  resolve.at_cursor(client, win, { group = M.open_group }, function(item)
-    -- a slow server must not steal focus after you moved on
-    if vim.api.nvim_get_current_win() ~= win or vim.api.nvim_get_mode().mode:sub(1, 1) ~= "n" then
-      return
+  local group = M.open_group
+  if not client then
+    if not (Config.options.syntax and syntax.available(bufnr)) then
+      return util.notify("No language server with call hierarchy for this buffer", vim.log.levels.WARN)
     end
-    if M.current and M.current:valid() then
-      M.current:close()
+    -- a same-file bow-tie from tree-sitter
+    return syntax.at_cursor(win, function(g)
+      local v = not group.cancelled and float_for(win, g ~= nil)
+      if v and g then
+        v:render(g)
+      end
+    end)
+  end
+  local root = util.root(bufnr, client)
+  resolve.at_cursor(client, win, { group = group }, function(item)
+    local v = float_for(win, item ~= nil)
+    if v then
+      M.load(v, client, item, { root = root, bufnr = bufnr, depth = Config.for_server(client.name).depth })
     end
-    if not item then
-      return util.notify("No function at the cursor", vim.log.levels.WARN)
-    end
-    local v = view.new({
-      kind = "float",
-      max_items = Config.options.float.max_items,
-      actions = M.float_actions,
-      keys = M.float_keys,
-      win = {
-        position = "float",
-        width = Config.options.float.width,
-        height = 8,
-        border = "rounded",
-        backdrop = false,
-        enter = true,
-        zindex = 45,
-      },
-    })
-    v.origin = win
-    v:show()
-    follow(v)
-    M.load(v, client, item, { root = root, bufnr = bufnr, depth = Config.for_server(client.name).depth })
-    M.current = v
   end)
 end
 

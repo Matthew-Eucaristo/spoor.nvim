@@ -91,4 +91,66 @@ T["detect reads the declaration from the file"] = function()
   eq(fw.detect(model.node(action), H.ts).id, "next.action")
 end
 
+T["your own rules (opts.frameworks) run before the built-in ones"] = function()
+  require("spoor.config").setup({
+    frameworks = {
+      {
+        id = "bun.fetch",
+        label = "Bun · fetch handler",
+        ft = { "ts" },
+        match = function(c)
+          return c.name == "fetch" and c.head:find("Bun%.serve") ~= nil
+        end,
+      },
+      {
+        id = "any.main",
+        label = "my runtime",
+        match = function(c)
+          return c.name == "main"
+        end,
+      },
+      {
+        id = "broken",
+        label = "throws",
+        match = function()
+          error("bug in a user rule")
+        end,
+      },
+      {
+        label = "no id",
+        match = function()
+          return true
+        end,
+      },
+    },
+  })
+  eq(match("server.ts", "fetch", "fetch(req) {", "Bun.serve({\n"), "bun.fetch")
+  eq(match("server.js", "fetch", "fetch(req) {", "Bun.serve({\n"), nil) -- ft limits it
+  -- no ft: every file; and yours win over the built-in go.main
+  eq(match("cmd/shop/main.go", "main", "func main() {", "package main\n"), "any.main")
+  eq(match("main.zig", "main", "pub fn main() void {"), "any.main")
+  -- a rule that errors or lacks an id is skipped; built-in rules still apply
+  eq(match("x/x.go", "init", "func init() {"), "go.init")
+  require("spoor.config").setup({ frameworks = false })
+  eq(match("x/x.go", "init", "func init() {"), nil)
+end
+
+T["health names the rules and detectors it skips"] = function()
+  require("spoor").setup({
+    live = { enabled = false },
+    frameworks = { { id = "half", label = "no match function" } },
+    entries = { make = "not a function", npm = false },
+  })
+  vim.cmd("checkhealth spoor")
+  local buf, out = vim.api.nvim_get_current_buf(), ""
+  H.wait(function()
+    out = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+    return out:find("your rules", 1, true) ~= nil
+  end, 3000, "health output")
+  MiniTest.expect.no_equality(out:find("frameworks[1] (half) is skipped: needs a match(ctx) function", 1, true), nil)
+  MiniTest.expect.no_equality(out:find("entries.make is skipped", 1, true), nil)
+  eq(out:find("entries.npm", 1, true), nil)
+  vim.cmd("bwipeout!")
+end
+
 return T

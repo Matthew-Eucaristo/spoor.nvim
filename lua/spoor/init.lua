@@ -17,9 +17,6 @@ function M.setup(opts)
   if vim.fn.has("nvim-0.11") == 0 then
     return vim.notify("spoor.nvim needs Neovim 0.11 or newer", vim.log.levels.ERROR, { title = "spoor" })
   end
-  if not (_G.Snacks or pcall(require, "snacks")) then
-    return vim.notify("spoor.nvim needs snacks.nvim (folke/snacks.nvim)", vim.log.levels.ERROR, { title = "spoor" })
-  end
   Config.setup(opts)
   require("spoor.highlights").setup()
   vim.api.nvim_create_autocmd("ColorScheme", {
@@ -38,7 +35,7 @@ function M.setup(opts)
   map(keys.entries, M.entries, "Entry Points")
   map(keys.changes, M.changes, "Changed Symbols (git)")
   if keys.toggle then
-    if _G.Snacks and Snacks.toggle then
+    if require("spoor.ui").snacks() and Snacks.toggle then
       Snacks.toggle({
         id = "spoor_live",
         name = "Live Bow-tie",

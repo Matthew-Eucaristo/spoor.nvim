@@ -584,7 +584,7 @@ function M.open(opts)
     for _, it in ipairs(items) do
       files[it.file] = true
     end
-    Snacks.picker.pick({
+    require("spoor.ui").pick({
       source = "spoor_changes",
       title = ("Changed since %s · %s · %s"):format(
         label,

@@ -23,14 +23,19 @@ CONTENTS                                                      *spoor-contents*
 spoor shows the callers and callees of the function under the cursor (the
 "bow-tie"), lets you walk a call path one hop at a time while keeping notes
 (a "trail"), and lists the symbols changed since a git ref with their
-bow-ties. Data comes from your language server's call hierarchy and from git.
-spoor has no AI, builds no index, and makes no network requests.
+bow-ties. Data comes from your language server's call hierarchy and from git;
+where no server has call hierarchy, a same-file bow-tie comes from tree-sitter
+(|spoor-syntax|). spoor has no AI, builds no index, and makes no network
+requests.
 
 ==============================================================================
 2. INSTALL                                                     *spoor-install*
 
-Requires Neovim 0.11+, snacks.nvim, git, and a language server that supports
-`textDocument/prepareCallHierarchy`. Tested on macOS and Linux.
+Requires Neovim 0.11+ and git. A language server that supports
+`textDocument/prepareCallHierarchy` gives cross-file bow-ties; without one,
+tree-sitter gives a same-file view (|spoor-syntax|). snacks.nvim is optional:
+with it pickers have previews; without it spoor uses plain windows and
+|vim.ui.select()|. Tested on macOS, Linux and Windows.
 
 With lazy.nvim / LazyVim (spoor's own `lazy.lua` brings in snacks.nvim): >lua
 
@@ -44,14 +49,14 @@ With lazy.nvim / LazyVim (spoor's own `lazy.lua` brings in snacks.nvim): >lua
 With Neovim 0.12's |vim.pack|: >lua
 
     vim.pack.add({
-      "https://github.com/folke/snacks.nvim",
+      "https://github.com/folke/snacks.nvim", -- optional: picker previews
       "https://github.com/Matthew-Eucaristo/spoor.nvim",
     })
     require("spoor").setup()
 <
-Any other way: put spoor and snacks.nvim on 'runtimepath', run
-`:helptags ALL` once, and call `require("spoor").setup()`. Without it only
-|:Spoor| exists.
+Any other way: put spoor (and snacks.nvim, if you want it) on
+'runtimepath', run `:helptags ALL` once, and call `require("spoor").setup()`.
+Without it only |:Spoor| exists.
 
 Run |:checkhealth| `spoor` to see what each attached server supports.
 
@@ -146,6 +151,28 @@ package.json bin/main/scripts, Python `__main__`, route decorators and
 [project.scripts], Dart `main` (→ runApp), JVM `main` and Spring mappings,
 Rust `fn main`.
 
+                                                          *spoor-entries-own*
+Add your own detectors with `entries`, keyed by name. A detector is
+`function(root, files)` (`files` from `git ls-files`) returning a list of
+`{ name, file, lnum, col?, detail?, lang?, trace? }`; `file` may be relative
+to `root`, `lang` defaults to the detector's name, and `trace = true` starts a
+trace when picked. A built-in name (go, next, dart, python, jvm, rust, npm)
+replaces that detector, and `false` turns it off: >lua
+
+    entries = {
+      make = function(root, files)
+        local out = {}
+        for i, line in ipairs(vim.fn.readfile(root .. "/Makefile")) do
+          local target = line:match("^([%w_-]+):")
+          if target then
+            out[#out + 1] = { name = target, file = "Makefile", lnum = i }
+          end
+        end
+        return out
+      end,
+      npm = false,
+    }
+<
 ==============================================================================
 8. EDGES, BADGES AND FRAMEWORKS                                   *spoor-edges*
 
@@ -167,6 +194,41 @@ Static analysis can't see calls made through dependency-injection containers,
 reflection or message buses. A function with no static callers shows
 "no static callers · framework or dynamic entry?" and spoor asks for its
 value references so you can see where it is registered.
+
+                                                            *spoor-frameworks*
+Add your own ⚑ rules with `frameworks`, a list of rules shaped like the
+built-in ones in `lua/spoor/frameworks.lua`. Yours are tried first: >lua
+
+    frameworks = {
+      {
+        id = "bun.fetch",
+        label = "Bun · fetch handler",  -- shown as the caller row
+        ft = { "ts", "js" },            -- file extensions; nil: every file
+        only_if_empty = false,          -- only when nothing calls it
+        match = function(c)
+          -- c = { rel, name, kind, head, decl }: path relative to the
+          -- project, symbol name and kind, the first lines of the file and
+          -- the declaration (decorators through the signature)
+          return c.name == "fetch" and c.head:find("Bun%.serve") ~= nil
+        end,
+      },
+    }
+<
+`frameworks = false` turns the labels off. A rule that errors is skipped;
+|:checkhealth| `spoor` lists the ones it can't use.
+
+                                                                *spoor-syntax*
+When no attached server supports call hierarchy (marksman, ty, or a buffer
+with no server), spoor builds the bow-tie from the buffer's tree-sitter tree.
+Functions and calls are found by node type name ("function", "method",
+"lambda", "call", "invocation", ...), so any language with a parser works
+without per-language queries. Callees are the calls inside the function;
+callers are the uses of its name in the same file, grouped by the function
+around each use. Callees defined elsewhere are dimmed and jump to the call
+site. The bow-tie says "syntax only · this file", `.` re-roots within the
+file, and |spoor-gat| needs a language server. Parsing is asynchronous and the
+index is rebuilt once per edit. A server that can answer always wins;
+`syntax = false` turns the fallback off.
 
 ==============================================================================
 9. COMMANDS                                                    *spoor-commands*
@@ -198,12 +260,14 @@ Pass a table to `require("spoor").setup()` (`opts` in lazy.nvim). Defaults:
       implementations = true,
       max_implementation_lookups = 8,
       references = true,
+      syntax = true,         -- tree-sitter fallback, |spoor-syntax|
       servers = {
         dartls = { depth = 1, timeout = 20000, live_callers = false },
       },
       hide = { external = true, generated = true, tests = false },
       exclude = {},          -- Lua patterns on project-relative paths
-      frameworks = true,
+      frameworks = true,     -- false, or your rules: |spoor-frameworks|
+      entries = {},          -- your detectors: |spoor-entries-own|
       trace = { width = 58, max_hops = 9 },
       changes = { base = nil, max_files = 60 },
       keys = { bowtie = "gag", trace = "gat", resume = "<leader>ct",
@@ -242,9 +306,10 @@ require("spoor").toggle({on})        Live on/off; nil toggles.
 require("spoor").current_graph()     Current bow-tie as JSON-ready data.
 require("spoor").current_trail()     Current trail as JSON-ready data.
 
-Graph: `{ version, focus, server, nodes = { { id, name, kind, path, range,`
-`selection, tags, impls?, framework? } }, edges = { { from, to, kind,`
-`sites, source } } }`. Edge kinds: "call", "jsx", "ref". Ids look like
+Graph: `{ version, focus, server, source, nodes = { { id, name, kind, path,`
+`range, selection, tags, impls?, framework? } }, edges = { { from, to, kind,`
+`sites, source } } }`. `source` is "lsp" or "syntax" (|spoor-syntax|). Edge
+kinds: "call", "jsx", "ref". Ids look like
 "internal/order/order.go#24:5" (0-based line:column), with paths relative to
 the project root.
 

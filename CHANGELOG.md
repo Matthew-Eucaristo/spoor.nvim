@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Any language: where no language server has call hierarchy (marksman, ty, or no server at all), a same-file bow-tie from tree-sitter, labelled *syntax only · this file*. Functions and calls are found by node type name, so every parser works without per-language queries. The language server always wins when it can answer; `syntax = false` turns it off.
+- Your own frameworks and entry points: `frameworks = { rule, ... }` and `entries = { name = detector }` take the same shape as the built-in ones; `entries = { npm = false }` turns one off.
+- snacks.nvim is optional: without it spoor uses plain windows and `vim.ui.select` (pickers without previews).
+- Windows: project-relative paths handle backslashes and drive letters; CI runs the tests on Windows.
+
 ## 1.1.1 - 2026-10-27
 
 - Fix: the cursor card stayed hidden while a sidebar such as the snacks explorer was open. Only floats anchored to the cursor (hover, signature, diagnostics) make it step aside now.

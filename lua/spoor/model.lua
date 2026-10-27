@@ -1,9 +1,9 @@
 --- The graph and trail model. Plain tables that serialize to JSON, so a future
 --- CLI (or an optional AI module) can read exactly what the editor shows.
 ---
---- graph = { version, focus, nodes = { [id] = node }, edges = { edge, ... }, status, server, root }
+--- graph = { version, focus, nodes = { [id] = node }, edges = { edge, ... }, status, server, root, source }
 --- node  = { id, name, kind, detail, uri, range, selection, tags = { [tag] = true }, impls?, framework? }
---- edge  = { from, to, kind = "call"|"ref"|"jsx"|"impl"|"framework", sites = { range, ... }, source = "lsp" }
+--- edge  = { from, to, kind = "call"|"ref"|"jsx"|"impl"|"framework", sites = { range, ... }, source = "lsp"|"syntax" }
 local util = require("spoor.util")
 
 local M = {}
@@ -30,7 +30,7 @@ M.VERSION = 1
 ---@field to string
 ---@field kind "call"|"ref"|"jsx"|"impl"|"framework"
 ---@field sites lsp.Range[]
----@field source "lsp"|"framework"
+---@field source "lsp"|"framework"|"syntax"
 
 ---@class spoor.Graph
 ---@field version integer
@@ -42,6 +42,8 @@ M.VERSION = 1
 ---@field server? string
 ---@field root? string
 ---@field expanded table<string, boolean>
+---@field source? "lsp"|"syntax" syntax: built from tree-sitter, this file only
+---@field complete? boolean
 
 ---@param item lsp.CallHierarchyItem
 ---@return spoor.Node
@@ -160,7 +162,14 @@ function M.export(g)
   local edges = vim.tbl_map(function(e)
     return { from = id(e.from), to = id(e.to), kind = e.kind, sites = e.sites, source = e.source }
   end, g.edges)
-  return { version = g.version, focus = id(g.focus), server = g.server, nodes = nodes, edges = edges }
+  return {
+    version = g.version,
+    focus = id(g.focus),
+    server = g.server,
+    source = g.source or "lsp",
+    nodes = nodes,
+    edges = edges,
+  }
 end
 
 --- A trail is an ordered walk through nodes with your notes.

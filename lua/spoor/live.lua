@@ -4,6 +4,7 @@ local Config = require("spoor.config")
 local bowtie = require("spoor.bowtie")
 local lsp = require("spoor.lsp")
 local resolve = require("spoor.resolve")
+local syntax = require("spoor.syntax")
 local util = require("spoor.util")
 local view = require("spoor.view")
 
@@ -152,7 +153,7 @@ M.actions = vim.tbl_extend("force", view.base_actions, {
   end,
   trace = function(v)
     local node = v:node_at_cursor() or (v.graph and v.graph.nodes[v.graph.focus])
-    if node then
+    if node and view.can_trace(v) then
       require("spoor.trace").start(node, { client = v.client, root = v.graph.root, origin = v.origin })
     end
   end,
@@ -256,31 +257,30 @@ function M.update()
   end
   local bufnr = vim.api.nvim_win_get_buf(win)
   local client = lsp.client(bufnr)
-  local existing = M.panels[vim.api.nvim_get_current_tabpage()]
-  if not client then
-    if existing and existing:valid() then
-      existing:set_stale(true)
-    end
-    return hide_card()
-  end
   if M.group then
     M.group:cancel()
   end
   M.group = lsp.group()
-  local tick = M.generation
+  local group, tick = M.group, M.generation
   local tab = vim.api.nvim_get_current_tabpage()
-  resolve.at_cursor(client, win, { group = M.group }, function(item)
-    -- drop answers for an edited buffer, a closed window or a tab you have left
+
+  --- The view to show `key` in, or nil when there is nothing (new) to show.
+  ---@param found boolean
+  ---@param key? string
+  ---@return spoor.View?
+  local function target(found, key)
+    -- drop answers for an edited buffer, a closed window, a tab you have left or a newer cursor
     if
-      tick ~= M.generation
+      group.cancelled
+      or tick ~= M.generation
       or not vim.api.nvim_win_is_valid(win)
       or vim.api.nvim_win_get_buf(win) ~= bufnr
       or vim.api.nvim_get_current_tabpage() ~= tab
     then
-      return
+      return nil
     end
-    local v = M.panels[vim.api.nvim_get_current_tabpage()]
-    if not item then
+    local v = M.panels[tab]
+    if not found then
       if v and v:valid() then
         v:set_stale(true)
       end
@@ -289,7 +289,6 @@ function M.update()
     if Config.options.live.layout == "cursor" and cursor_float(win) then
       return hide_card()
     end
-    local key = key_for(item)
     if v and v:valid() and v.key == key then
       if v.opts.kind == "card" then
         v.origin = win
@@ -301,6 +300,31 @@ function M.update()
     v.origin = win
     v:set_stale(false)
     v.key = key
+    return v
+  end
+
+  if not client then
+    if not Config.options.syntax then
+      return target(false)
+    end
+    -- no call hierarchy here: a same-file bow-tie from tree-sitter
+    return syntax.at_cursor(win, function(g)
+      local v = target(g ~= nil, g and ("syntax:" .. g.focus .. "@" .. tick))
+      if v and g then
+        if v.group then
+          v.group:cancel()
+        end
+        v.client, v.load_opts = nil, nil
+        v:render(g)
+      end
+    end)
+  end
+  resolve.at_cursor(client, win, { group = group }, function(item)
+    local key = item and key_for(item)
+    local v = target(item ~= nil, key)
+    if not v then
+      return
+    end
     local cached = M.cache_get(key)
     if cached then
       if v.group then
