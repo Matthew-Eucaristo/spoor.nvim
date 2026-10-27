@@ -119,7 +119,7 @@ T["lua: on a call to another file's function, that function (through go-to-defin
   eq(g.scope, "store.lua")
   eq(names(g, "out"), { "encode" })
   eq(names(g, "in"), { "M.process call ×1", "M.save_all call ×1" }) -- and the call you are on
-  eq(#server.requests, 1)
+  expect.no_equality(H.count(server.requests, "textDocument/definition"), 0)
   eq(vim.fn.bufnr(dir .. "/store.lua"), -1) -- read, not opened as a buffer
 end
 
@@ -166,7 +166,7 @@ T["the live card falls back to syntax and says so"] = function()
     v = live.panels[vim.api.nvim_get_current_tabpage()]
     return v and v:valid() and text(v.win.buf):find("subtotal", 1, true) ~= nil
   end, 3000, "panel")
-  expect.no_equality(vim.wo[v.win.win].winbar:find("syntax only · this file", 1, true), nil)
+  expect.no_equality(vim.wo[v.win.win].winbar:find("syntax", 1, true), nil)
   eq(vim.wo[v.win.win].winbar:find("static calls only", 1, true), nil)
   expect.no_equality(text(v.win.buf):find("checkout", 1, true), nil)
 end
@@ -184,7 +184,7 @@ T["the card footer names syntax, not a server"] = function()
   local footer = table.concat(vim.tbl_map(function(c)
     return c[1]
   end, vim.api.nvim_win_get_config(v.win.win).footer))
-  expect.no_equality(footer:find("syntax only · this file", 1, true), nil)
+  expect.no_equality(footer:find("syntax", 1, true), nil)
 end
 
 T["a server without call hierarchy (marksman, ty) gets the syntax bow-tie"] = function()
@@ -202,7 +202,67 @@ T["a server without call hierarchy (marksman, ty) gets the syntax bow-tie"] = fu
     local v = live.panels[vim.api.nvim_get_current_tabpage()]
     return v and v:valid() and v.graph and v.graph.source == "syntax"
   end, 3000, "syntax panel")
-  eq(#server.requests, 0) -- spoor never asks it
+  eq(H.count(server.requests, "textDocument/prepareCallHierarchy"), 0) -- only for references
+end
+
+--- The graph at the cursor once callers from the rest of the project are in.
+local function project_graph()
+  local g = graph_here()
+  H.wait(function()
+    return g.status.incoming == "done" and g.reach ~= nil
+  end, 5000, "project callers")
+  return g
+end
+
+T["lua: callers from other files through the server's find-references"] = function()
+  local bufnr = open("store.lua", "function M.save", "save")
+  require("spoor.config").setup({})
+  local server = H.fake_server(bufnr, {
+    name = "refsonly",
+    root = dir,
+    capabilities = { referencesProvider = true },
+    handlers = {
+      ["textDocument/references"] = function()
+        local at = function(file, line, character)
+          local p = { line = line, character = character }
+          return { uri = vim.uri_from_fname(dir .. "/" .. file), range = { start = p, ["end"] = p } }
+        end
+        return { at("store.lua", 13, 6), at("shop.lua", 21, 9) }
+      end,
+    },
+  })
+  local g = project_graph()
+  eq(g.reach, "refsonly references")
+  -- M.save_all from this file (tree-sitter), M.process from shop.lua (the server)
+  eq(names(g, "in"), { "M.process call ×1", "M.save_all call ×1" })
+  expect.no_equality(H.count(server.requests, "textDocument/references"), 0)
+  eq(server.requests[1].params.context.includeDeclaration, false)
+  eq(server.requests[1].params.position, { line = 7, character = 11 }) -- at "save" in "M.save"
+  eq(vim.fn.bufnr(dir .. "/shop.lua"), -1)
+end
+
+T["no server: callers from other files by name (git grep), skipping files with their own"] = function()
+  local repo = vim.fn.tempname()
+  vim.fn.mkdir(repo .. "/lib", "p")
+  vim.fn.writefile({ "local M = {}", "function M.helper()", "  return 1", "end", "return M" }, repo .. "/lib/a.lua")
+  vim.fn.writefile({
+    "local a = require('a')",
+    "-- helper in a comment, and 'helper' in a string",
+    "local function run()",
+    "  return a.helper()",
+    "end",
+    "return run",
+  }, repo .. "/b.lua")
+  vim.fn.writefile({ "local function helper() end", "local function go()", "  helper()", "end" }, repo .. "/c.lua")
+  vim.fn.writefile({ "helper()" }, repo .. "/d.txt") -- another language
+  vim.system({ "git", "init", "-q" }, { cwd = repo }):wait()
+  vim.system({ "git", "add", "." }, { cwd = repo }):wait()
+  H.edit(repo .. "/lib/a.lua", 2, 11)
+  require("spoor.config").setup({})
+  local g = project_graph()
+  eq(g.reach, "name search")
+  eq(names(g, "in"), { "run call ×1" })
+  vim.fn.delete(repo, "rf")
 end
 
 T["a server with call hierarchy always wins over syntax"] = function()

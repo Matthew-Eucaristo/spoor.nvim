@@ -38,8 +38,22 @@ View.__index = View
 
 ---@param opts spoor.ViewOpts
 ---@return spoor.View
+---@type table<spoor.View, true> every view, to re-render one whose graph grew
+local views = setmetatable({}, { __mode = "k" })
+
+--- Re-render the views showing `g` (a graph that gained nodes after it was first shown).
+---@param g spoor.Graph
+function M.refresh(g)
+  for v in pairs(views) do
+    if v.graph == g and v:valid() then
+      v:render(g)
+    end
+  end
+end
+
 function M.new(opts)
   local self = setmetatable({ opts = opts, show_all = false, origin = vim.api.nvim_get_current_win() }, View)
+  views[self] = true
   local keys = {}
   for lhs, spec in pairs(opts.keys) do
     local action = opts.actions[spec[1]]
@@ -280,7 +294,7 @@ function View:decorate(r)
       footer = {
         {
           " "
-            .. (self.graph.source == "syntax" and ("syntax only · " .. (self.graph.scope or "this file")) or self.graph.server or "lsp")
+            .. (self.graph.source == "syntax" and render.syntax_label(self.graph) or self.graph.server or "lsp")
             .. " · ",
           "SpoorDim",
         },

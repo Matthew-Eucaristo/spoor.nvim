@@ -22,8 +22,9 @@ M.defaults = {
     max_items = 12, -- rows per side per level before "+N more"
     preview = true, -- show the node under the cursor in the code window; <CR> stays, <Esc> returns
   },
-  -- Where no language server has call hierarchy (or there is none), a same-file bow-tie from
-  -- tree-sitter, labelled "syntax only · this file". The language server always wins.
+  -- Where no language server has call hierarchy (or there is none), a bow-tie from tree-sitter:
+  -- callees in the function, callers from the project (the server's find-references, else
+  -- git grep for the name). The language server's call hierarchy always wins.
   syntax = true,
   timeout = 1500, -- hard per-request timeout in ms
   cold_timeout = 15000, -- for a server's first answer, while it is still indexing

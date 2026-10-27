@@ -262,8 +262,12 @@ function M.side(g, dir, opts)
     elseif status == "error" then
       rows[#rows + 1] = { kind = "message", depth = 0, text = "server error · R to retry", hl = "SpoorWarn" }
     elseif dir == "in" and g.source == "syntax" and not focus.framework then
-      rows[#rows + 1] =
-        { kind = "message", depth = 0, text = "no callers in " .. (g.scope or "this file"), hl = "SpoorMessage" }
+      rows[#rows + 1] = {
+        kind = "message",
+        depth = 0,
+        text = g.reach and "no callers found" or ("no callers in " .. (g.scope or "this file")),
+        hl = "SpoorMessage",
+      }
     elseif dir == "in" and not focus.framework then
       rows[#rows + 1] = { kind = "message", depth = 0, text = ic.warn .. " no static callers", hl = "SpoorWarn" }
       rows[#rows + 1] = { kind = "message", depth = 0, text = "framework or dynamic entry?", hl = "SpoorMessage" }
@@ -305,6 +309,15 @@ local function hidden_text(hidden)
   return #parts > 0 and (" +" .. table.concat(parts, " · ") .. " hidden") or ""
 end
 
+--- What a tree-sitter bow-tie covers: "syntax only · this file", or where its callers came from.
+---@param g spoor.Graph
+function M.syntax_label(g)
+  if g.reach then
+    return "syntax · " .. g.reach
+  end
+  return "syntax only · " .. (g.scope or "this file")
+end
+
 --- Legend chunks for a footer/winbar: honest about what the edges are.
 ---@param g spoor.Graph
 function M.legend(g)
@@ -320,7 +333,7 @@ function M.legend(g)
   end
   local out = { { " static calls only", "SpoorMessage" } }
   if g.source == "syntax" then
-    out = { { " syntax only · " .. (g.scope or "this file"), "SpoorMessage" } }
+    out = { { " " .. M.syntax_label(g), "SpoorMessage" } }
   elseif g.server then
     out[#out + 1] = { " · " .. g.server, "SpoorMessage" }
   end

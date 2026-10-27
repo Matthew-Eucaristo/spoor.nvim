@@ -521,6 +521,8 @@ local function inside(sel, pos)
     and (pos[1] < sel[3] or (pos[1] == sel[3] and pos[2] <= sel[4]))
 end
 
+local at_file
+
 ---@param src integer|string
 ---@param pos integer[] {row, col} 0-based, byte column
 ---@param o {uri: string, lang?: string, project?: string, exact?: boolean}
@@ -570,7 +572,7 @@ local function at(src, pos, o, cb)
       if not uri then
         return fallback()
       end
-      M.at_file(uri, dpos, encoding, function(g)
+      at_file(uri, dpos, encoding, { exact = true, project = idx.project or util.root(src) }, function(g)
         if not g then
           return fallback()
         end
@@ -580,17 +582,248 @@ local function at(src, pos, o, cb)
           model.add_edge(g, { from = caller.id, to = g.focus, kind = "call", sites = { site }, source = "syntax" })
         end
         cb(g)
-      end, { exact = true, project = idx.project or util.root(src) })
+      end)
     end)
   end)
 end
 
---- Build the same-file bow-tie at a position: the function there (or the one it calls).
+--- A file's source for tree-sitter: its buffer when loaded, else its text (no buffer is created).
+---@param path string
+---@return (integer|string)? src, string[] lines, string? lang (for text)
+local function source(path)
+  local buf = vim.fn.bufnr(path)
+  local lines = util.read_lines(path, 20000)
+  if buf > 0 and vim.api.nvim_buf_is_loaded(buf) then
+    return buf, lines
+  end
+  local ft = #lines > 0 and vim.filetype.match({ filename = path, contents = lines })
+  local lang = ft and vim.treesitter.language.get_lang(ft)
+  if not lang then
+    return nil, lines
+  end
+  return table.concat(lines, "\n"), lines, lang
+end
+
+---@param uri string
+---@param pos lsp.Position
+---@param encoding? string
+---@param o {exact?: boolean, project?: string}
+---@param cb fun(g: spoor.Graph?)
+function at_file(uri, pos, encoding, o, cb)
+  local path = util.path(uri)
+  local src, lines, lang = source(path)
+  if not src then
+    return cb(nil)
+  end
+  local p = { pos.line, util.byte_col(lines[pos.line + 1] or "", pos.character, encoding) }
+  at(src, p, { uri = uri, lang = lang, exact = o.exact, project = o.project }, function(g)
+    -- name the file when it is not the one in the code window ("syntax only · store.lua")
+    local win = util.code_window(vim.api.nvim_get_current_win())
+    if g and not (win and vim.uri_from_bufnr(vim.api.nvim_win_get_buf(win)) == g.nodes[g.focus].uri) then
+      g.scope = vim.fs.basename(path)
+    end
+    cb(g)
+  end)
+end
+
+--- Sites already in the graph: "uri:line:col" of every edge into the focus.
+local function known_sites(g)
+  local seen = {}
+  for _, e in ipairs(g.edges) do
+    if e.to == g.focus then
+      local from = g.nodes[e.from]
+      for _, site in ipairs(e.sites) do
+        seen[from.uri .. ":" .. site.start.line .. ":" .. site.start.character] = true
+      end
+    end
+  end
+  return seen
+end
+
+--- Add callers from other files: each use grouped by the function around it, as a call or a
+--- reference. `hits` are {uri, line, col} with a byte column.
+---@param g spoor.Graph
+---@param hits {uri: string, line: integer, col: integer}[]
+---@param by_name boolean hits come from a name search: skip definitions and non-identifiers
+local function add_callers(g, hits, by_name)
+  local focus = g.nodes[g.focus]
+  local key = key_of(focus.name)
+  local seen = known_sites(g)
+  local files, order = {}, {}
+  for _, h in ipairs(hits) do
+    if h.uri ~= focus.uri and not seen[h.uri .. ":" .. h.line .. ":" .. h.col] then
+      if not files[h.uri] then
+        files[h.uri] = {}
+        order[#order + 1] = h.uri
+      end
+      table.insert(files[h.uri], h)
+    end
+  end
+  for i, uri in ipairs(order) do
+    if i > M.max_files then
+      g.truncated = true
+      break
+    end
+    local src, _, lang = source(util.path(uri))
+    local ok, parser = false, nil
+    if type(src) == "number" then
+      ok, parser = pcall(vim.treesitter.get_parser, src, nil, { error = false })
+    elseif src then
+      ok, parser = pcall(vim.treesitter.get_string_parser, src, lang)
+    end
+    local trees = ok and parser and parser:parse()
+    local root = trees and trees[1] and trees[1]:root()
+    local idx = root and index(src --[[@as integer|string]], parser:lang(), root, { uri = uri })
+    -- a file with its own function of that name most likely calls its own
+    local own = by_name and idx and key and idx.by_key[key]
+    for _, h in ipairs(idx and not own and files[uri] or {}) do
+      local node = root:named_descendant_for_range(h.line, h.col, h.line, h.col)
+      local t = node and node:type() or ""
+      local word = node and text(node, src --[[@as integer|string]])
+      local ok_use = node and not t:find("string") and not t:find("comment")
+      if by_name then -- the name itself, not another function's definition of the same name
+        ok_use = ok_use and word == key and not idx.names[h.line .. ":" .. h.col]
+      end
+      if ok_use then
+        ---@cast node TSNode
+        local site = range({ node:range() })
+        local from = enclosing(idx, node)
+        local caller
+        if from then
+          caller = model.add_node(g, def_node(from, uri))
+        else
+          caller = model.add_node(g, {
+            id = "syntax:top:" .. uri,
+            name = "(top level)",
+            kind = util.kinds.File,
+            uri = uri,
+            range = site,
+            selection = site,
+            tags = {},
+          })
+        end
+        local line = idx.lines[h.line + 1] or ""
+        local call = is_callee(idx, node) or line:sub(select(4, node:range()) + 1):find("^%s*[%(%[<`!]") ~= nil
+        model.add_edge(
+          g,
+          { from = caller.id, to = focus.id, kind = call and "call" or "ref", sites = { site }, source = "syntax" }
+        )
+      end
+    end
+  end
+end
+
+--- Name-search hits for `key` in the project (git grep, same file extension as `path`).
+---@param root string
+---@param path string
+---@param key string
+---@param cb fun(hits?: {uri: string, line: integer, col: integer}[])
+local function grep(root, path, key, cb)
+  local ext = path:match("%.([%w_]+)$")
+  local cmd = { "git", "grep", "-n", "--column", "-w", "-F", "-I", "-e", key }
+  if ext then
+    vim.list_extend(cmd, { "--", "*." .. ext })
+  end
+  local ok = pcall(vim.system, cmd, { cwd = root, text = true }, function(r)
+    vim.schedule(function()
+      if r.code ~= 0 then
+        return cb(r.code == 1 and {} or nil) -- 1: no match; else not a git repo
+      end
+      local hits = {}
+      for l in r.stdout:gmatch("[^\n]+") do
+        local file, line, col = l:match("^(.-):(%d+):(%d+):")
+        if file and #hits < M.max_hits then
+          hits[#hits + 1] =
+            { uri = vim.uri_from_fname(root .. "/" .. file), line = tonumber(line) - 1, col = tonumber(col) - 1 }
+        end
+      end
+      cb(hits)
+    end)
+  end)
+  if not ok then
+    cb(nil)
+  end
+end
+
+M.max_files = 60 -- files opened to place project-wide uses
+M.max_hits = 400
+
+--- Callers and references from the whole project, added to `g` in place: the server's
+--- find-references when it has one, else a git grep for the name. Views showing `g` re-render.
+---@param g spoor.Graph
+---@param buf? integer the buffer you are in (for its language server)
+function M.project(g, buf)
+  local focus = g.nodes[g.focus]
+  local path = util.path(focus.uri)
+  buf = buf or vim.api.nvim_win_get_buf(util.code_window(vim.api.nvim_get_current_win()) or 0)
+  local lsp = require("spoor.lsp")
+  local client = lsp.client(buf, "textDocument/references")
+  local before = g.status.incoming
+  g.status.incoming = "loading"
+  local function done(hits, reach, by_name)
+    g.status.incoming = before
+    if hits then
+      add_callers(g, hits, by_name)
+      g.reach = reach
+    end
+    require("spoor.view").refresh(g)
+  end
+  local function by_name()
+    local root = g.root or util.root(buf)
+    grep(root, path, key_of(focus.name) or focus.name, function(hits)
+      done(hits, "name search", true)
+    end)
+  end
+  if not client then
+    return by_name()
+  end
+  -- ask at the name itself: "load" in "M.load" (at "M" a server finds the module's uses)
+  local start = focus.selection.start
+  local line = util.read_lines(path, start.line + 1)[start.line + 1] or ""
+  local key = key_of(focus.name)
+  local col = start.character + ((key and focus.name:find(vim.pesc(key) .. "[!?]?%s*$")) or 1) - 1
+  local ok, character = pcall(vim.str_utfindex, line, client.offset_encoding, col, false)
+  local params = {
+    textDocument = { uri = focus.uri },
+    position = { line = start.line, character = ok and character or col },
+    context = { includeDeclaration = false },
+  }
+  lsp.request(client, "textDocument/references", params, { bufnr = buf }, function(err, result)
+    if err or type(result) ~= "table" then
+      return by_name()
+    end
+    local hits, lines = {}, {}
+    for _, loc in ipairs(result) do
+      local p = util.path(loc.uri)
+      lines[p] = lines[p] or util.read_lines(p, 20000)
+      local s = loc.range.start
+      hits[#hits + 1] = {
+        uri = loc.uri,
+        line = s.line,
+        col = util.byte_col(lines[p][s.line + 1] or "", s.character, client.offset_encoding),
+      }
+    end
+    done(hits, client.name .. " references")
+  end)
+end
+
+--- Callbacks that also look across the project once the file's bow-tie is shown.
+local function with_project(cb, buf)
+  return function(g)
+    cb(g)
+    if g then
+      M.project(g, buf)
+    end
+  end
+end
+
+--- Build the bow-tie at a position: the function there (or the one it calls). Callers from
+--- the rest of the project arrive afterwards (views showing the graph re-render).
 ---@param buf integer
 ---@param pos integer[] {row, col} 0-based, byte column
 ---@param cb fun(g: spoor.Graph?)
 function M.at(buf, pos, cb)
-  at(buf, pos, { uri = vim.uri_from_bufnr(buf) }, cb)
+  at(buf, pos, { uri = vim.uri_from_bufnr(buf) }, with_project(cb, buf))
 end
 
 --- The bow-tie at a position in any file: its buffer when loaded, else its text (no buffer is
@@ -599,32 +832,8 @@ end
 ---@param pos lsp.Position
 ---@param encoding? string of `pos.character` ("utf-8" for spoor's own syntax graphs)
 ---@param cb fun(g: spoor.Graph?)
----@param opts? {exact?: boolean, project?: string}
-function M.at_file(uri, pos, encoding, cb, opts)
-  opts = opts or {}
-  local path = util.path(uri)
-  local inner = cb
-  cb = function(g)
-    -- name the file when it is not the one in the code window ("syntax only · store.lua")
-    local win = util.code_window(vim.api.nvim_get_current_win())
-    if g and not (win and vim.uri_from_bufnr(vim.api.nvim_win_get_buf(win)) == g.nodes[g.focus].uri) then
-      g.scope = vim.fs.basename(path)
-    end
-    inner(g)
-  end
-  local buf = vim.fn.bufnr(path)
-  local lines = util.read_lines(path, 20000)
-  local p = { pos.line, util.byte_col(lines[pos.line + 1] or "", pos.character, encoding) }
-  local o = { uri = uri, exact = opts.exact, project = opts.project }
-  if buf > 0 and vim.api.nvim_buf_is_loaded(buf) then
-    return at(buf, p, o, cb)
-  end
-  local ft = #lines > 0 and vim.filetype.match({ filename = path, contents = lines })
-  o.lang = ft and vim.treesitter.language.get_lang(ft)
-  if not o.lang then
-    return cb(nil)
-  end
-  at(table.concat(lines, "\n"), p, o, cb)
+function M.at_file(uri, pos, encoding, cb)
+  at_file(uri, pos, encoding, {}, with_project(cb))
 end
 
 --- The same-file bow-tie at a window's cursor.
