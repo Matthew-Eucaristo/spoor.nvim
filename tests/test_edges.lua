@@ -345,26 +345,6 @@ T["gag with nothing callable under the cursor says so"] = function()
   eq(require("spoor.bowtie").current == nil or not require("spoor.bowtie").current:valid(), true)
 end
 
-T["without snacks.nvim, setup says so and maps nothing"] = function()
-  local snacks, loaded = _G.Snacks, package.loaded.snacks
-  _G.Snacks, package.loaded.snacks = nil, nil
-  package.preload.snacks = function()
-    error("not installed")
-  end
-  local msgs = {}
-  local orig = vim.notify
-  vim.notify = function(m)
-    msgs[#msgs + 1] = m
-  end
-  require("spoor").setup({})
-  vim.notify = orig
-  package.preload.snacks = nil
-  _G.Snacks, package.loaded.snacks = snacks, loaded
-  eq(msgs[1], "spoor.nvim needs snacks.nvim (folke/snacks.nvim)")
-  eq(vim.fn.maparg("gag", "n"), "")
-  eq(pcall(vim.api.nvim_get_autocmds, { group = "spoor_live" }), false)
-end
-
 -- Trails ---------------------------------------------------------------------
 
 T["a corrupt trail file is treated as empty"] = function()

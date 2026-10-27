@@ -1,6 +1,6 @@
 # spoor.nvim
 
-Follow the trail through a codebase without leaving LazyVim. spoor shows who calls the function under your cursor and what it calls, keeps the path you walked with your notes, and tells you which functions your coding agent just added that nothing calls yet. It uses your language server and git, with no AI and no index to build.
+Follow the trail through a codebase without leaving Neovim. spoor shows who calls the function under your cursor and what it calls, keeps the path you walked with your notes, and tells you which functions your coding agent just added that nothing calls yet. It uses your language server and git, falls back to tree-sitter where there is no call hierarchy, and needs no AI and no index to build. It works in plain Neovim and in LazyVim alike.
 
 ![spoor: the live bow-tie, the deeper float, a trace with a note, and the changed-symbols picker](demo/demo.gif)
 
@@ -12,12 +12,13 @@ A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the
 - **Entry points.** `<leader>ce` finds `main` functions, HTTP routes, Next.js pages and route handlers, Flutter `main → runApp`, and package scripts. Picking one starts a trace there.
 - **Honest edges.** Calls marked `◇3` go through an interface with three implementations. `~` marks a function passed as a value, such as a handler or callback. `</>` marks JSX. Framework-invoked roots such as a Next.js page or a Flutter `build()` get a `⚑` row naming the framework instead of an empty callers column, and everything else is labelled *static calls only*.
 - **Less noise.** Vendor code, SDKs, `node_modules` and generated files are hidden but counted, and `H` shows them.
+- **Any language.** The language server's call hierarchy is the source whenever it has one. Where it doesn't (marksman, ty, a file with no server at all), spoor builds a same-file bow-tie from tree-sitter, labelled *syntax only · this file*, for any language with a parser.
 
 There is no whole-repo graph view. A graph seeded from your cursor, one or two hops deep, teaches more than a hairball. (The [research notes](#why-a-bow-tie) explain this.)
 
 ## Install
 
-You need Neovim 0.11 or newer, [snacks.nvim](https://github.com/folke/snacks.nvim) (LazyVim ships it), git, and a language server with call hierarchy. gopls, vtsls, tsgo, dartls, pyright, jdtls, clangd and rust-analyzer all qualify. spoor is tested on macOS and Linux.
+You need Neovim 0.11 or newer and git. A language server with call hierarchy gives the full, cross-file picture: gopls, vtsls, tsgo, dartls, pyright, jdtls, clangd and rust-analyzer all qualify. Without one, spoor uses tree-sitter for a same-file view. [snacks.nvim](https://github.com/folke/snacks.nvim) (LazyVim ships it) is optional: with it, pickers show a preview and get snacks' help and toggles; without it, spoor uses plain windows and `vim.ui.select`, so whatever picker you registered for that is used. spoor is tested on macOS, Linux and Windows.
 
 ### LazyVim or lazy.nvim
 
@@ -38,13 +39,13 @@ Restart Neovim and lazy.nvim installs spoor and snacks.nvim (declared in spoor's
 ### Neovim 0.12's built-in `vim.pack`
 
 ```lua
-vim.pack.add({ "https://github.com/folke/snacks.nvim", "https://github.com/Matthew-Eucaristo/spoor.nvim" })
+vim.pack.add({ "https://github.com/Matthew-Eucaristo/spoor.nvim" }) -- add folke/snacks.nvim for picker previews
 require("spoor").setup()
 ```
 
 ### Any other way
 
-Put spoor and snacks.nvim on your `runtimepath` (for example, `git clone` both into `~/.local/share/nvim/site/pack/plugins/start/`), run `:helptags ALL` once so `:h spoor` works, and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys and no live panel.
+Put spoor (and snacks.nvim, if you want it) on your `runtimepath` (for example, `git clone` into `~/.local/share/nvim/site/pack/plugins/start/`), run `:helptags ALL` once so `:h spoor` works, and call `require("spoor").setup()`. Without `setup()` only the `:Spoor` command exists, with no keys and no live panel.
 
 ### Why not Homebrew?
 
@@ -113,7 +114,48 @@ Call data comes from your language server. Labels for framework-invoked code com
 | Python | FastAPI/Flask-style route decorators, Celery/Dramatiq tasks, pytest tests, `main` |
 | JVM | `static void main`, Spring `@*Mapping`/`@Scheduled`/`@EventListener`/`@Bean`, JUnit |
 
-The entry-point picker uses the same knowledge, plus `package.json` `bin`/`main`/`scripts`, `[project.scripts]`, `if __name__ == "__main__":` and Rust `fn main`. Adding a framework means adding one rule in [`frameworks.lua`](lua/spoor/frameworks.lua) and one test.
+The entry-point picker uses the same knowledge, plus `package.json` `bin`/`main`/`scripts`, `[project.scripts]`, `if __name__ == "__main__":` and Rust `fn main`.
+
+### Your own frameworks and entry points
+
+spoor doesn't grow a rule for every framework. Add yours in your config instead: `frameworks` takes rules shaped like the built-in ones in [`frameworks.lua`](lua/spoor/frameworks.lua) (tried first, so yours win), and `entries` takes detectors shaped like the ones in [`entries.lua`](lua/spoor/entries.lua):
+
+```lua
+opts = {
+  frameworks = {
+    {
+      id = "bun.fetch",
+      label = "Bun · fetch handler", -- shown as the caller row
+      ft = { "ts", "js" }, -- file extensions; leave out for every file
+      only_if_empty = false, -- true: only when nothing calls it statically
+      -- c = { rel, name, kind, head (first lines of the file), decl (the declaration) }
+      match = function(c)
+        return c.name == "fetch" and c.head:find("Bun%.serve") ~= nil
+      end,
+    },
+  },
+  entries = {
+    -- name = function(root, files) -> { { name, file, lnum, col?, detail?, lang?, trace? } }
+    make = function(root, files)
+      local out = {}
+      for i, line in ipairs(vim.fn.readfile(root .. "/Makefile")) do
+        local target = line:match("^([%w_-]+):")
+        if target then
+          out[#out + 1] = { name = target, file = "Makefile", lnum = i } -- paths may be relative to root
+        end
+      end
+      return out
+    end,
+    npm = false, -- turn off a built-in detector
+  },
+}
+```
+
+`frameworks = false` turns the labels off. A rule or detector that errors is skipped, and `:checkhealth spoor` lists the ones it can't use.
+
+### Without call hierarchy: tree-sitter
+
+When no attached server supports `textDocument/prepareCallHierarchy`, spoor reads the buffer's tree-sitter tree instead. It finds functions and calls by node type name (`function_declaration`, `method_definition`, `call_expression`, `function_call`, `method_invocation`, and so on), so it needs no per-language queries and works for any language with a parser installed. Callees are the calls inside the function, and callers are the uses of its name in the same file. Callees defined elsewhere are dimmed and jump to the call site. The bow-tie is labelled *syntax only · this file*; `gat` traces need a language server. A server that can answer always replaces it, and `syntax = false` turns it off.
 
 Static analysis can't see some edges: dependency-injection containers, calls through reflection, and events on a message bus. spoor shows a function with no static callers as `⚠ no static callers · framework or dynamic entry?` instead of an empty column, and it lists value references (`~`) so you can see where a handler gets registered.
 
@@ -128,6 +170,8 @@ spoor makes three requests per bow-tie (prepare, incoming calls, outgoing calls)
 | tsgo 7.0 preview | same app | <1 ms | 5 ms | 6 ms | 12 ms |
 | pyright 1.1.413 | Python package, 70 files | 2 ms | 2 ms | 11 ms | 32 ms |
 | dartls (Dart 3.13) | Flutter app, 1,300 files | 8 ms | 9 ms | **21 s** | — |
+
+The tree-sitter fallback parses asynchronously and indexes a buffer once per edit. On a generated 5,000-line Lua file the first bow-tie takes 16 ms (parse included), later ones 0.5 ms, and one after an edit 6.5 ms; on a real 3,800-line file, 32 ms, 0.7 ms and 9 ms (`nvim --clean -l bench/syntax.lua`, Neovim 0.11.7 and 0.12.6 on an Apple M-series laptop).
 
 dartls answers "who calls this?" with a workspace-wide search that took 14–21 s on a large Flutter app. For dartls, the live panel therefore shows callees immediately and finds callers when you press `R`, with a 20 s limit. `build()` and the other Flutter lifecycle methods never search for callers, because only the framework calls them. You can tune each server under `servers`. Run `bench/callhierarchy.lua` to measure your own projects.
 
@@ -157,12 +201,14 @@ These are the defaults. Pass only what you want to change in `opts`.
   implementations = true, -- ◇N badges
   max_implementation_lookups = 8,
   references = true, -- "used as a value" sites when there are no static callers
+  syntax = true, -- same-file tree-sitter bow-tie where no server has call hierarchy
   servers = {
     dartls = { depth = 1, timeout = 20000, live_callers = false },
   },
   hide = { external = true, generated = true, tests = false },
   exclude = {}, -- Lua patterns on project-relative paths, e.g. { "^legacy/" }
-  frameworks = true,
+  frameworks = true, -- false: off; a list of your own rules, tried first
+  entries = {}, -- your own entry-point detectors by name; name = false turns a built-in off
   trace = { width = 58, max_hops = 9 },
   changes = { base = nil, max_files = 60 }, -- base: a git ref; default is the branch point
   keys = {
@@ -172,7 +218,7 @@ These are the defaults. Pass only what you want to change in `opts`.
 }
 ```
 
-Highlight groups (`SpoorFocus`, `SpoorName`, `SpoorLoc`, `SpoorEdge`, `SpoorInterface`, `SpoorValue`, `SpoorFramework`, `SpoorWarn` and others) link to standard groups, so spoor follows your colorscheme. Icons come from mini.icons, like the rest of LazyVim.
+Highlight groups (`SpoorFocus`, `SpoorName`, `SpoorLoc`, `SpoorEdge`, `SpoorInterface`, `SpoorValue`, `SpoorFramework`, `SpoorWarn` and others) link to standard groups, so spoor follows your colorscheme. Icons come from mini.icons when it is installed (LazyVim ships it), with plain fallbacks otherwise.
 
 ## Files and uninstall
 
@@ -189,9 +235,9 @@ The bow-tie and the trail are plain data with the same JSON shape a future CLI w
 
 ```lua
 require("spoor").current_graph()
--- { version = 1, focus = "internal/order/order.go#24:5", server = "gopls",
+-- { version = 1, focus = "internal/order/order.go#24:5", server = "gopls", source = "lsp"|"syntax",
 --   nodes = { { id, name, kind, path, range, selection, tags, impls?, framework? } },
---   edges = { { from, to, kind = "call"|"jsx"|"ref", sites, source = "lsp" } } }
+--   edges = { { from, to, kind = "call"|"jsx"|"ref", sites, source = "lsp"|"syntax" } } }
 
 require("spoor").current_trail()
 -- { version = 1, title, steps = { { name, kind, path, line, via, note, framework } } }
@@ -208,8 +254,9 @@ Field studies put about 58% of developer time into comprehension ([Xia et al. 20
 ```sh
 make test     # unit and integration tests (mini.test, an in-process fake language server)
 make e2e      # real gopls and vtsls/tsgo on tests/fixtures
-make smoke    # spoor inside real configs: no plugin manager, plain lazy.nvim, stock LazyVim
+make smoke    # spoor inside real configs: no plugin manager, no snacks.nvim, plain lazy.nvim, stock LazyVim
 make lint     # stylua --check
+nvim --clean -l bench/syntax.lua  # time the tree-sitter fallback on a 5,000-line file
 demo/run.sh   # a throwaway LazyVim (all state under .tests/demo) with this checkout on a demo repo
 vhs demo/demo.tape  # re-record demo/demo.gif (needs vhs, gopls, JetBrainsMono Nerd Font)
 ```

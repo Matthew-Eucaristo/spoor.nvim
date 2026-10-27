@@ -100,7 +100,7 @@ end
 function M.classify(path, root, opts)
   local rel, inside = util.relative(path, root)
   local tags = {}
-  if not inside or any(path, M.external_patterns) then
+  if not inside or any(util.normalize(path), M.external_patterns) then
     tags.external = true
   end
   if

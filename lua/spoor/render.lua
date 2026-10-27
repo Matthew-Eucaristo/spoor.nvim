@@ -155,7 +155,9 @@ local function entry(line, row, g, width, side)
   else
     icon, icon_hl = icons.kind(node.kind)
   end
-  local name_hl = (node.tags.external or node.tags.generated or node.tags.test) and "SpoorDim" or "SpoorName"
+  -- outside: a syntax-only callee that is not defined in this file
+  local name_hl = (node.tags.external or node.tags.generated or node.tags.test or node.tags.outside) and "SpoorDim"
+    or "SpoorName"
   if row.edge and row.edge.kind == "ref" then
     name_hl = "SpoorValue"
   end
@@ -259,6 +261,8 @@ function M.side(g, dir, opts)
       rows[#rows + 1] = { kind = "message", depth = 0, text = "R to find callers (slow server)", hl = "SpoorMessage" }
     elseif status == "error" then
       rows[#rows + 1] = { kind = "message", depth = 0, text = "server error · R to retry", hl = "SpoorWarn" }
+    elseif dir == "in" and g.source == "syntax" and not focus.framework then
+      rows[#rows + 1] = { kind = "message", depth = 0, text = "no callers in this file", hl = "SpoorMessage" }
     elseif dir == "in" and not focus.framework then
       rows[#rows + 1] = { kind = "message", depth = 0, text = ic.warn .. " no static callers", hl = "SpoorWarn" }
       rows[#rows + 1] = { kind = "message", depth = 0, text = "framework or dynamic entry?", hl = "SpoorMessage" }
@@ -314,7 +318,9 @@ function M.legend(g)
     seen[e.kind] = true
   end
   local out = { { " static calls only", "SpoorMessage" } }
-  if g.server then
+  if g.source == "syntax" then
+    out = { { " syntax only · this file", "SpoorMessage" } }
+  elseif g.server then
     out[#out + 1] = { " · " .. g.server, "SpoorMessage" }
   end
   if seen.interface then

@@ -30,22 +30,29 @@ jobs:
         include:
           - os: macos-latest
             nvim: stable
+          - os: windows-latest
+            nvim: stable
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows: the Makefile needs a POSIX shell
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1.6.1
         with:
           neovim: true
           version: ${{ matrix.nvim }}
+      - if: runner.os == 'Windows'
+        run: command -v make || choco install make --no-progress -y
       - run: make test
 
   smoke:
-    # spoor in real configs: no plugin manager, plain lazy.nvim, stock LazyVim
+    # spoor in real configs: no plugin manager, no snacks.nvim, plain lazy.nvim, stock LazyVim
     strategy:
       fail-fast: false
       matrix:
         nvim: [stable, nightly, v0.11.7]
-        config: [minimal, lazy, lazyvim]
+        config: [minimal, nosnacks, lazy, lazyvim]
     runs-on: ubuntu-latest
     # upstream plugins may break on nightly; that must not block spoor's own checks
     continue-on-error: ${{ matrix.nvim == 'nightly' && matrix.config != 'minimal' }}

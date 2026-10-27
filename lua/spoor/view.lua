@@ -8,7 +8,7 @@ local ns = vim.api.nvim_create_namespace("spoor")
 M.ns = ns
 
 ---@class spoor.View
----@field win snacks.win
+---@field win spoor.Win|snacks.win
 ---@field graph? spoor.Graph
 ---@field rendered? spoor.Rendered
 ---@field origin integer window to jump in
@@ -51,7 +51,7 @@ function M.new(opts)
       mode = "n",
     }
   end
-  self.win = Snacks.win(vim.tbl_deep_extend("force", {
+  self.win = require("spoor.ui").win(vim.tbl_deep_extend("force", {
     show = false,
     enter = false,
     fixbuf = true,
@@ -221,7 +221,10 @@ function View:decorate(r)
     if self.opts.kind == "card" then
       -- the card is a glance; say where the rest is
       footer = {
-        { " " .. (self.graph.server or "lsp") .. " · ", "SpoorDim" },
+        {
+          " " .. (self.graph.source == "syntax" and "syntax only · this file" or self.graph.server or "lsp") .. " · ",
+          "SpoorDim",
+        },
         { "gag", "SpoorKey" },
         { " for more ", "SpoorDim" },
       }
@@ -322,9 +325,7 @@ M.base_actions = {
     end
   end,
   help = function(v)
-    -- snacks places its help above the window's zindex, which a split doesn't have
-    v.win.opts.zindex = v.win.opts.zindex or 50
-    v.win:toggle_help()
+    require("spoor.ui").toggle_help(v.win)
   end,
   yank = function(v)
     if v.graph then
@@ -333,6 +334,16 @@ M.base_actions = {
     end
   end,
 }
+
+--- A trace follows the language server's call hierarchy; a syntax-only bow-tie has none.
+---@param v spoor.View
+function M.can_trace(v)
+  if v.graph and v.graph.source == "syntax" then
+    require("spoor.util").notify("Tracing needs a language server with call hierarchy", vim.log.levels.WARN)
+    return false
+  end
+  return true
+end
 
 M.Config = Config
 return M

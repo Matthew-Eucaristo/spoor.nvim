@@ -15,7 +15,7 @@ local M = {}
 
 ---@class spoor.TraceState
 ---@field trail? spoor.Trail
----@field win? snacks.win
+---@field win? spoor.Win|snacks.win
 ---@field origin? integer
 ---@field client? vim.lsp.Client
 ---@field graph? spoor.Graph
@@ -475,8 +475,7 @@ local actions = {
   end,
   help = function()
     if valid() then
-      M.state.win.opts.zindex = M.state.win.opts.zindex or 50 -- a split has none; snacks needs one
-      M.state.win:toggle_help()
+      require("spoor.ui").toggle_help(M.state.win)
     end
   end,
 }
@@ -505,7 +504,7 @@ function M.open_window()
       desc = "Take hop " .. k,
     }
   end
-  s.win = Snacks.win({
+  s.win = require("spoor.ui").win({
     position = "right",
     relative = "win", -- split the code window, so the live panel keeps the full width
     win = s.origin and vim.api.nvim_win_is_valid(s.origin) and s.origin or nil,
@@ -625,7 +624,7 @@ function M.pick_trail()
   if #items == 0 then
     return util.notify("No trails yet in this project. Start one with gat or <leader>ce.")
   end
-  Snacks.picker.pick({
+  require("spoor.ui").pick({
     source = "spoor_trails",
     title = "Trails",
     items = items,

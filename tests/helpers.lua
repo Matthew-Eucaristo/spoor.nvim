@@ -269,6 +269,32 @@ function H.go_handlers(w, extra)
   return vim.tbl_extend("force", handlers, extra or {})
 end
 
+--- Copy a directory tree (no `cp`, so it runs on Windows too).
+function H.copy_dir(src, dst)
+  for name, type in vim.fs.dir(src, { depth = math.huge }) do
+    local from, to = src .. "/" .. name, dst .. "/" .. name
+    if type == "directory" then
+      vim.fn.mkdir(to, "p")
+    elseif type == "file" then
+      vim.fn.mkdir(vim.fs.dirname(to), "p")
+      assert(vim.uv.fs_copyfile(from, to))
+    end
+  end
+end
+
+--- Hide snacks.nvim, as if it were not installed. Returns a function that brings it back.
+function H.without_snacks()
+  local snacks, loaded = rawget(_G, "Snacks"), package.loaded.snacks
+  _G.Snacks, package.loaded.snacks = nil, nil
+  package.preload.snacks = function()
+    error("module 'snacks' not found")
+  end
+  return function()
+    package.preload.snacks = nil
+    _G.Snacks, package.loaded.snacks = snacks, loaded
+  end
+end
+
 --- Open a fixture file in the current window.
 function H.edit(file, line, col)
   vim.cmd("edit " .. vim.fn.fnameescape(file))

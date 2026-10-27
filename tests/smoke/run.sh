@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Smoke-test spoor in a real config: tests/smoke/run.sh <minimal|lazy|lazyvim|pack>
+# Smoke-test spoor in a real config: tests/smoke/run.sh <minimal|nosnacks|lazy|lazyvim|pack>
 #   NVIM=/path/to/nvim         Neovim to test (default: nvim)
 #   SPOOR_URL=<git url>        install spoor from this URL instead of this checkout
 #   SPOOR_SMOKE_HOME=<dir>     where the throwaway config lives (default: .tests/smoke/<config>-<version>)
 # Everything lives under SPOOR_SMOKE_HOME; your own Neovim config is never read.
 set -euo pipefail
-config=${1:?usage: run.sh <minimal|lazy|lazyvim|pack>}
+config=${1:?usage: run.sh <minimal|nosnacks|lazy|lazyvim|pack>}
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 nvim=${NVIM:-nvim}
 version=$("$nvim" --version | head -1 | awk '{print $2}')

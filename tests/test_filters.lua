@@ -15,6 +15,20 @@ T["external: outside the project, vendor, SDKs"] = function()
   eq(tags("/w/app/internal/order.go").external, nil)
 end
 
+T["relative: Windows backslashes, drive letters and case"] = function()
+  local util = require("spoor.util")
+  eq({ util.relative([[C:\Users\dev\app\internal\order.go]], [[C:\Users\dev\app]]) }, { "internal/order.go", true })
+  eq({ util.relative("c:/Users/dev/app/internal/order.go", [[C:\Users\dev\app\]]) }, { "internal/order.go", true })
+  eq({ util.relative([[C:\Users\Dev\App\x.go]], "c:/users/dev/app") }, { "x.go", true })
+  eq({ util.relative([[C:\Users\dev\app]], "C:/Users/dev/app") }, { ".", true })
+  eq(select(2, util.relative([[D:\other\x.go]], [[C:\Users\dev\app]])), false)
+  eq(select(2, util.relative([[C:\Users\dev\app2\x.go]], [[C:\Users\dev\app]])), false)
+  -- POSIX paths stay as they are, backslash and all
+  eq({ util.relative("/w/app/a\\b.go", "/w/app") }, { "a\\b.go", true })
+  eq(tags([[C:\w\app\node_modules\react\index.js]], [[C:\w\app]]).external, true)
+  eq(tags([[C:\w\app\internal\order_test.go]], "C:/w/app").test, true)
+end
+
 T["generated: by name and by header"] = function()
   eq(tags("/w/app/api/order.pb.go").generated, true)
   eq(tags("/w/app/lib/model.g.dart").generated, true)

@@ -2,7 +2,9 @@
 --- callers by design; spoor says who calls it instead of showing an empty column.
 ---
 --- A rule is data plus one `match(ctx)` function, so adding a framework is one
---- table entry and one test. Rules never run the language server.
+--- table entry and one test. Rules never run the language server. Your own rules
+--- (`opts.frameworks = { rule, ... }`) have the same shape and are checked first.
+local Config = require("spoor.config")
 local util = require("spoor.util")
 
 local M = {}
@@ -17,7 +19,7 @@ local M = {}
 ---@class spoor.FrameworkRule
 ---@field id string
 ---@field label string who invokes this, shown as the caller row
----@field ft string[] file extensions the rule applies to
+---@field ft? string[] file extensions the rule applies to (nil: every file)
 ---@field only_if_empty? boolean show only when there are no static callers
 ---@field skip_incoming? boolean don't ask for callers: only the framework calls it, and the search is slow
 ---@field match fun(ctx: spoor.FrameworkCtx): boolean
@@ -304,14 +306,51 @@ function M.context(node, rel, lines)
   }
 end
 
---- First matching rule for a context, or nil.
+--- Why a rule can't be used, or nil when it is well-formed.
+---@param rule any
+---@return string?
+function M.invalid(rule)
+  if type(rule) ~= "table" then
+    return "a rule is a table"
+  end
+  if type(rule.id) ~= "string" or type(rule.label) ~= "string" then
+    return "needs id and label strings"
+  end
+  if type(rule.match) ~= "function" then
+    return "needs a match(ctx) function"
+  end
+  if rule.ft ~= nil and type(rule.ft) ~= "table" then
+    return "ft is a list of file extensions"
+  end
+end
+
+--- Rules in the order they are tried: yours (opts.frameworks), then the built-in ones.
+---@return spoor.FrameworkRule[]
+function M.active()
+  local opt = Config.options.frameworks
+  if opt == false then
+    return {}
+  end
+  local out = {}
+  for _, rule in ipairs(type(opt) == "table" and opt or {}) do
+    if not M.invalid(rule) then
+      out[#out + 1] = rule
+    end
+  end
+  return vim.list_extend(out, M.rules)
+end
+
+--- First matching rule for a context, or nil. A rule that errors is skipped.
 ---@param ctx spoor.FrameworkCtx
 ---@return spoor.FrameworkRule?
 function M.match(ctx)
   local e = ext(ctx.rel)
-  for _, rule in ipairs(M.rules) do
-    if vim.tbl_contains(rule.ft, e) and rule.match(ctx) then
-      return rule
+  for _, rule in ipairs(M.active()) do
+    if not rule.ft or vim.tbl_contains(rule.ft, e) then
+      local ok, hit = pcall(rule.match, ctx)
+      if ok and hit then
+        return rule
+      end
     end
   end
 end

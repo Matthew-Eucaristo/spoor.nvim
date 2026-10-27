@@ -19,6 +19,9 @@ M.defaults = {
     max_items = 12, -- rows per side per level before "+N more"
     preview = true, -- show the node under the cursor in the code window; <CR> stays, <Esc> returns
   },
+  -- Where no language server has call hierarchy (or there is none), a same-file bow-tie from
+  -- tree-sitter, labelled "syntax only · this file". The language server always wins.
+  syntax = true,
   timeout = 1500, -- hard per-request timeout in ms
   cold_timeout = 15000, -- for a server's first answer, while it is still indexing
   max_nodes = 60, -- cap on nodes in one expanded graph
@@ -38,7 +41,13 @@ M.defaults = {
   },
   -- Extra path patterns (Lua patterns, matched against the path relative to the project root)
   exclude = {},
-  frameworks = true, -- tag framework-invoked roots (Next.js routes, Flutter build(), Go handlers, ...)
+  -- Tag framework-invoked roots (Next.js routes, Flutter build(), Go handlers, ...). true: the
+  -- built-in rules; false: off; a list of rules: yours, tried before the built-in ones
+  -- (see :h spoor-frameworks).
+  frameworks = true,
+  -- Your own entry-point detectors for <leader>ce, by name: name = function(root, files) that
+  -- returns entries. A built-in name replaces that detector, and name = false turns it off.
+  entries = {},
   trace = {
     width = 58,
     max_hops = 9, -- next-hop candidates numbered 1-9

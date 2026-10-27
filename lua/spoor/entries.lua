@@ -1,6 +1,7 @@
 --- Entry points: where the program, the router or the framework starts calling
 --- your code. Found with `git ls-files` / `git grep` (fast, respects .gitignore)
---- plus manifest parsing. Picking one starts a trace there.
+--- plus manifest parsing. Picking one starts a trace there. Your own detectors
+--- (`opts.entries = { name = function(root, files) ... end }`) have the same shape.
 local Config = require("spoor.config")
 local util = require("spoor.util")
 
@@ -63,6 +64,13 @@ function M.handler_col(text)
   end
 end
 
+--- Absolute path of a repo-relative file, with forward slashes (git's own form) on Windows too.
+---@param root string
+---@param rel string
+local function abs_path(root, rel)
+  return util.normalize(vim.fs.joinpath(root, rel))
+end
+
 local function first_line(lines, pattern)
   for i, l in ipairs(lines) do
     if l:find(pattern) then
@@ -77,7 +85,7 @@ M.detectors = {}
 function M.detectors.go(root, files)
   local out = {}
   for _, hit in ipairs(M.grep(root, [[^func main\(\)]], { "*.go" })) do
-    local abs = vim.fs.joinpath(root, hit.file)
+    local abs = abs_path(root, hit.file)
     local head = util.read_lines(abs, 40)
     if first_line(head, "^package main") then
       local dir = vim.fs.dirname(hit.file)
@@ -100,7 +108,7 @@ function M.detectors.go(root, files)
       out[#out + 1] = {
         lang = "route",
         name = verb .. (path ~= "" and path or "/"), -- "" is the root of a route group
-        file = vim.fs.joinpath(root, hit.file),
+        file = abs_path(root, hit.file),
         lnum = hit.lnum,
         col = M.handler_col(hit.text),
         detail = vim.trim(hit.text),
@@ -120,7 +128,7 @@ function M.detectors.next(root, files)
     local kind = stem and NEXT_SPECIAL[stem]
     local app = rel:find("^app/") or rel:find("^src/app/") or rel:find("/app/")
     if kind and (app or kind == "middleware" or kind == "proxy") and not rel:find("node_modules") then
-      local abs = vim.fs.joinpath(root, rel)
+      local abs = abs_path(root, rel)
       local lines = util.read_lines(abs, 400)
       if kind == "route" then
         for i, l in ipairs(lines) do
@@ -156,7 +164,7 @@ function M.detectors.next(root, files)
         }
       end
     elseif ext and rel:match("^s?r?c?/?pages/") and not stem:match("^_") then
-      local abs = vim.fs.joinpath(root, rel)
+      local abs = abs_path(root, rel)
       local lines = util.read_lines(abs, 400)
       local i = first_line(lines, "^export%s+default")
       if i then
@@ -178,7 +186,7 @@ function M.detectors.npm(root, files)
   local out = {}
   for _, rel in ipairs(files) do
     if rel:match("^package%.json$") or rel:match("/package%.json$") then
-      local abs = vim.fs.joinpath(root, rel)
+      local abs = abs_path(root, rel)
       local lines = util.read_lines(abs, 2000)
       local ok, pkg = pcall(vim.json.decode, table.concat(lines, "\n"))
       if ok and type(pkg) == "table" then
@@ -226,7 +234,7 @@ function M.detectors.python(root, files)
     out[#out + 1] = {
       lang = "py",
       name = "__main__",
-      file = vim.fs.joinpath(root, hit.file),
+      file = abs_path(root, hit.file),
       lnum = hit.lnum,
       detail = hit.file,
       trace = false,
@@ -245,7 +253,7 @@ function M.detectors.python(root, files)
     out[#out + 1] = {
       lang = "route",
       name = ((method and method ~= "route") and (method:upper() .. " ") or "") .. (path or "?"),
-      file = vim.fs.joinpath(root, hit.file),
+      file = abs_path(root, hit.file),
       lnum = hit.lnum + 1, -- the decorated def is on the next line(s)
       col = 4,
       detail = vim.trim(hit.text),
@@ -254,7 +262,7 @@ function M.detectors.python(root, files)
   end
   for _, rel in ipairs(files) do
     if rel == "pyproject.toml" then
-      local abs = vim.fs.joinpath(root, rel)
+      local abs = abs_path(root, rel)
       local lines = util.read_lines(abs, 2000)
       local in_scripts = false
       for i, l in ipairs(lines) do
@@ -276,7 +284,7 @@ end
 function M.detectors.dart(root, files)
   local out = {}
   for _, hit in ipairs(M.grep(root, [=[^(Future<void>|void|Future)?[[:space:]]*main\(]=], { "*.dart" })) do
-    local abs = vim.fs.joinpath(root, hit.file)
+    local abs = abs_path(root, hit.file)
     local lines = util.read_lines(abs, 400)
     local app = first_line(lines, "runApp%(") and " → runApp" or ""
     out[#out + 1] = {
@@ -306,7 +314,7 @@ function M.detectors.jvm(root, files)
     out[#out + 1] = {
       lang = "jvm",
       name = "main",
-      file = vim.fs.joinpath(root, hit.file),
+      file = abs_path(root, hit.file),
       lnum = hit.lnum,
       col = (hit.text:find("main") or 1) - 1,
       detail = hit.file,
@@ -319,7 +327,7 @@ function M.detectors.jvm(root, files)
       lang = "route",
       name = ((verb and verb ~= "Request") and (verb:upper() .. " ") or "")
         .. (path or hit.text:match("@%a+Mapping") or "?"),
-      file = vim.fs.joinpath(root, hit.file),
+      file = abs_path(root, hit.file),
       lnum = hit.lnum,
       detail = vim.trim(hit.text),
       trace = false,
@@ -336,7 +344,7 @@ function M.detectors.rust(root, files)
     out[#out + 1] = {
       lang = "rust",
       name = "main",
-      file = vim.fs.joinpath(root, hit.file),
+      file = abs_path(root, hit.file),
       lnum = hit.lnum,
       col = (hit.text:find("main") or 1) - 1,
       detail = hit.file,
@@ -348,16 +356,66 @@ end
 
 M.order = { "go", "next", "dart", "python", "jvm", "rust", "npm" }
 
+--- Detectors in the order they run: the built-in ones (yours replace one of the same name,
+--- false turns it off), then yours (opts.entries) by name.
+---@return {name: string, fn: fun(root: string, files: string[]): spoor.Entry[]}[]
+function M.active()
+  local user = Config.options.entries or {}
+  local out = {}
+  for _, name in ipairs(M.order) do
+    local fn = user[name]
+    if fn == nil then
+      fn = M.detectors[name]
+    end
+    if type(fn) == "function" then
+      out[#out + 1] = { name = name, fn = fn }
+    end
+  end
+  local extra = {}
+  for name, fn in pairs(user) do
+    if type(fn) == "function" and not vim.tbl_contains(M.order, name) then
+      extra[#extra + 1] = name
+    end
+  end
+  table.sort(extra)
+  for _, name in ipairs(extra) do
+    out[#out + 1] = { name = name, fn = user[name] }
+  end
+  return out
+end
+
+--- Fill in what a detector may leave out (lang, trace, an absolute path); nil when unusable.
+---@param e any
+---@param root string
+---@param name string detector name, the default badge
+---@return spoor.Entry?
+local function complete(e, root, name)
+  if type(e) ~= "table" or type(e.file) ~= "string" or type(e.lnum) ~= "number" or e.name == nil then
+    return nil
+  end
+  local file = util.normalize(e.file)
+  if not (file:find("^/") or file:find("^%a:/") or file:find("^//")) then
+    file = abs_path(root, file)
+  end
+  e.file, e.name = file, tostring(e.name)
+  e.lang = e.lang or name
+  e.trace = e.trace == true
+  return e
+end
+
 --- All entry points under a project root.
 ---@param root string
 ---@return spoor.Entry[]
 function M.find(root)
+  root = util.normalize(root)
   local files = M.files(root)
   local out = {}
-  for _, name in ipairs(M.order) do
-    local ok, found = pcall(M.detectors[name], root, files)
-    if ok then
-      vim.list_extend(out, found)
+  for _, d in ipairs(M.active()) do
+    local ok, found = pcall(d.fn, root, files)
+    if ok and type(found) == "table" then
+      for _, e in ipairs(found) do
+        out[#out + 1] = complete(e, root, d.name)
+      end
     end
   end
   -- program entries first, then routes, then manifests; helper scripts in docs/, examples/,
@@ -437,7 +495,7 @@ function M.open()
       entry = e,
     }
   end
-  Snacks.picker.pick({
+  require("spoor.ui").pick({
     source = "spoor_entries",
     title = "Entry points",
     items = items,

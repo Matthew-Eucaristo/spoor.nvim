@@ -6,7 +6,7 @@ local eq, expect = MiniTest.expect.equality, MiniTest.expect
 local function repo(src)
   local dir = vim.fn.tempname()
   vim.fn.mkdir(dir, "p")
-  vim.system({ "cp", "-R", src .. "/.", dir }):wait()
+  H.copy_dir(src, dir)
   vim.system({ "git", "init", "-q" }, { cwd = dir }):wait()
   return dir
 end
@@ -117,6 +117,52 @@ T["python, dart, jvm, rust detectors"] = function()
   }) do
     eq({ want, vim.tbl_contains(n, want) }, { want, true })
   end
+end
+
+T["your own detectors (opts.entries): added, replacing or turning off built-in ones"] = function()
+  local dir = repo(H.go)
+  vim.fn.writefile({ "build:", "\tgo build ./...", "test:", "\tgo test ./..." }, dir .. "/Makefile")
+  require("spoor.config").setup({
+    entries = {
+      make = function(root, files)
+        local out = {}
+        for i, l in ipairs(vim.fn.readfile(root .. "/Makefile")) do
+          local target = l:match("^([%w_-]+):")
+          if target then
+            out[#out + 1] = { name = "make " .. target, file = "Makefile", lnum = i } -- relative is fine
+          end
+        end
+        return out
+      end,
+      broken = function()
+        error("bug in a user detector")
+      end,
+      junk = function()
+        return { { name = "no file" }, "not a table" }
+      end,
+      go = false,
+    },
+  })
+  local found = require("spoor.entries").find(dir)
+  local n = names(found)
+  eq(n, { "make make build", "make make test" })
+  eq(found[1].file, require("spoor.util").normalize(dir .. "/Makefile"))
+  eq(found[1].trace, false)
+end
+
+T["Windows paths: backslashes, drive letters and case still rank docs/ last"] = function()
+  local entries = require("spoor.entries")
+  entries.order = { "fake" }
+  -- the language server's root and the detector's paths in different Windows forms
+  entries.detectors.fake = function()
+    return {
+      { lang = "go", name = "docs tool", file = [[C:\Users\dev\shop-app\docs\tool.go]], lnum = 1, trace = true },
+      { lang = "go", name = "main", file = [[C:\Users\dev\shop-app\cmd\main.go]], lnum = 1, trace = true },
+    }
+  end
+  local found = entries.find("c:/Users/dev/shop-app")
+  eq(names(found), { "go main", "go docs tool" })
+  eq(found[1].file, "C:/Users/dev/shop-app/cmd/main.go")
 end
 
 T["outside git: nothing, no error"] = function()
