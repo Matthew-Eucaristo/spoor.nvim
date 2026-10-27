@@ -238,10 +238,10 @@ M.View = View
 M.keys = {
   ["<CR>"] = { "jump", desc = "Jump to node" },
   ["<2-LeftMouse>"] = { "jump", desc = "Jump to node" },
-  ["<Tab>"] = { "expand", desc = "Open one more level" },
+  ["<Tab>"] = { "expand", desc = "Expand / fold" },
   ["."] = { "reroot", desc = "Re-root on node" },
-  ["t"] = { "trace", desc = "Start a trace here" },
-  ["H"] = { "toggle_hidden", desc = "Show/hide external, generated, tests" },
+  ["t"] = { "trace", desc = "Trace from node" },
+  ["H"] = { "toggle_hidden", desc = "Show hidden" },
   ["R"] = { "retry", desc = "Retry" },
   ["h"] = { "left", desc = "Callers column" },
   ["l"] = { "right", desc = "Callees column" },

@@ -479,13 +479,13 @@ function M.open_window()
     return
   end
   local keys = {
-    ["<CR>"] = { "<CR>", actions.enter, desc = "Take hop / show step" },
+    ["<CR>"] = { "<CR>", actions.enter, desc = "Take hop / show" },
     ["<BS>"] = { "<BS>", actions.back, desc = "Step back" },
     n = { "n", actions.note, desc = "Note on step" },
-    i = { "i", actions.flip, desc = "Next hops: callers / callees" },
+    i = { "i", actions.flip, desc = "Callers ⇄ callees" },
     ["<C-q>"] = { "<C-q>", actions.quickfix, desc = "Trail to quickfix" },
-    m = { "m", actions.mermaid, desc = "Copy trail as Mermaid" },
-    q = { "q", actions.close, desc = "Close (the trail is saved)" },
+    m = { "m", actions.mermaid, desc = "Copy as Mermaid" },
+    q = { "q", actions.close, desc = "Close (saved)" },
     ["g?"] = { "g?", actions.help, desc = "Help" },
   }
   for k = 1, 9 do

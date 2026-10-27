@@ -80,10 +80,15 @@ T["re-root and back"] = function()
   cursor_on(v, "validate")
   require("spoor.bowtie").float_actions.reroot(v)
   H.wait(function()
-    return v.graph.nodes[v.graph.focus].name == "validate"
+    return v.graph.nodes[v.graph.focus].name == "validate" and v.graph.complete
   end)
+  -- the cursor lands on the new focus, not where it was
+  local _, side = v:node_at_cursor()
+  eq(side, "focus")
   require("spoor.bowtie").float_actions.back(v)
   eq(v.graph.nodes[v.graph.focus].name, "Process")
+  _, side = v:node_at_cursor()
+  eq(side, "focus")
 end
 
 T["<CR> jumps and closes"] = function()

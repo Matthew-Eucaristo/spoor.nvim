@@ -371,6 +371,66 @@ T["resuming a trail whose file is gone does not error"] = function()
   trace.close()
 end
 
+T["a trail with more hops than keys numbers only 1-9 and counts the rest"] = function()
+  local w = H.go_world()
+  local many = {}
+  for i = 1, 12 do
+    local it = vim.deepcopy(w.emit)
+    it.name = "callee" .. i
+    it.selectionRange.start.line = i
+    it.selectionRange["end"].line = i
+    many[i] = { to = it, fromRanges = { H.site(w.process, w.process.selectionRange.start.line + 1) } }
+  end
+  go_buffer({
+    handlers = {
+      ["callHierarchy/outgoingCalls"] = function(params)
+        return params.item.name == "Process" and many or {}
+      end,
+    },
+  })
+  require("spoor.config").setup({})
+  require("spoor.highlights").setup()
+  require("spoor.trace").start_at_cursor()
+  local s = require("spoor.trace").state
+  H.wait(function()
+    return s.win and s.win:valid() and #s.hops > 0
+  end, 3000, "hops")
+  local text = table.concat(vim.api.nvim_buf_get_lines(s.win.buf, 0, -1, false), "\n")
+  expect.no_equality(text:find("  9  ", 1, true), nil)
+  eq(text:find("  10  ", 1, true), nil)
+  expect.no_equality(text:find("3 more", 1, true), nil)
+  require("spoor.trace").close()
+end
+
+T["the live panel can be a float in the corner"] = function()
+  go_buffer()
+  setup({ live = { layout = "float" } })
+  move()
+  H.wait(function()
+    return panel_text():find("Emit", 1, true) ~= nil
+  end, 3000, "float panel")
+  local v = panel()
+  eq(vim.api.nvim_win_get_config(v.win.win).relative, "editor")
+  expect.no_equality(vim.api.nvim_get_current_win(), v.win.win)
+end
+
+T["health finds the code buffer when :checkhealth opens in a float"] = function()
+  local bufnr = H.edit(H.go .. "/internal/order/order.go", 1, 0)
+  H.fake_server(bufnr, { handlers = {} })
+  setup({ live = { enabled = false } })
+  vim.g.health = { style = "float" }
+  vim.cmd("checkhealth spoor")
+  local health = vim.api.nvim_get_current_buf()
+  local out = ""
+  H.wait(function()
+    out = table.concat(vim.api.nvim_buf_get_lines(health, 0, -1, false), "\n")
+    return out:find("fake:", 1, true) ~= nil or out:find("No language server", 1, true) ~= nil
+  end, 3000, "health output")
+  vim.g.health = nil
+  expect.no_equality(out:find("fake: ✓ prepareCallHierarchy", 1, true), nil)
+  vim.cmd("close")
+end
+
 -- Changes ----------------------------------------------------------------------
 
 T["base: empty repo, detached HEAD, no default branch"] = function()

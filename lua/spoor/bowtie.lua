@@ -101,6 +101,7 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
     if node and node.item and v.client then
       v.history = v.history or {}
       table.insert(v.history, v.graph)
+      v.placed = nil -- put the cursor on the new focus
       M.load(
         v,
         v.client,
@@ -112,6 +113,7 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
   back = function(v)
     local prev = v.history and table.remove(v.history)
     if prev then
+      v.placed = nil
       v:render(prev)
     end
   end,
@@ -128,7 +130,7 @@ M.float_actions = vim.tbl_extend("force", view.base_actions, {
 })
 
 M.float_keys = vim.tbl_extend("force", view.keys, {
-  ["<BS>"] = { "back", desc = "Back to the previous focus" },
+  ["<BS>"] = { "back", desc = "Previous focus" },
   ["q"] = { "close", desc = "Close" },
   ["<Esc>"] = { "close", desc = "Close" },
 })

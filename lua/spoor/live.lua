@@ -134,7 +134,7 @@ M.actions = vim.tbl_extend("force", view.base_actions, {
 })
 
 M.keys = vim.tbl_extend("force", view.keys, {
-  ["q"] = { "close", desc = "Turn the live bow-tie off" },
+  ["q"] = { "close", desc = "Turn live off" },
 })
 
 ---@return spoor.View
