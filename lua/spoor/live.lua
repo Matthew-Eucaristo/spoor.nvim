@@ -301,8 +301,14 @@ function M.setup()
       if not (v and v:valid()) then
         return
       end
-      if vim.api.nvim_get_current_win() == v.win.win then
+      local cur = vim.api.nvim_get_current_win()
+      if cur == v.win.win then
         v.user_quit = true -- :q in the panel itself
+        return
+      end
+      -- :q in the trail window closes just that; :qa from there quits everything by itself.
+      -- Closing the current window here would make Neovim abandon the quit.
+      if vim.bo[vim.api.nvim_win_get_buf(cur)].filetype == "spoor" then
         return
       end
       local code = 0

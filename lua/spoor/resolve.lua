@@ -66,6 +66,9 @@ end
 ---@param bufnr integer
 ---@param cb fun(symbols: table[]?)
 local function document_symbols(client, bufnr, opts, cb)
+  if not vim.api.nvim_buf_is_valid(bufnr) then
+    return cb(nil) -- wiped while an earlier request was in flight
+  end
   local key = client.id .. ":" .. bufnr
   local tick = vim.b[bufnr].changedtick
   local cached = symbol_cache[key]
@@ -105,7 +108,7 @@ function M.at_cursor(client, win, opts, cb)
   local params = vim.lsp.util.make_position_params(win, client.offset_encoding)
   local req = { bufnr = bufnr, group = opts.group, timeout = opts.timeout }
   prepare(client, bufnr, params.position, req, function(item)
-    if item or opts.enclosing == false then
+    if item or opts.enclosing == false or not vim.api.nvim_buf_is_valid(bufnr) then
       return cb(item)
     end
     document_symbols(client, bufnr, req, function(symbols)

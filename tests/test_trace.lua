@@ -60,7 +60,7 @@ T["interface hops offer the implementations"] = function()
   local orig = vim.ui.select
   vim.ui.select = function(items, _, on_choice)
     choices = items
-    on_choice(items[2])
+    on_choice(items[1])
   end
   local k
   for _, m in pairs(trace.state.rendered.map) do
@@ -70,7 +70,9 @@ T["interface hops offer the implementations"] = function()
   end
   trace.pick(k)
   vim.ui.select = orig
-  eq(#choices, 3) -- the interface itself + 2 implementations
+  eq(#choices, 3) -- 2 implementations, then the interface itself
+  expect.no_equality(choices[1].loc, nil) -- <CR> takes an implementation
+  eq(choices[3].loc, nil)
   H.wait(function()
     return #trace.state.trail.steps == 2
   end)

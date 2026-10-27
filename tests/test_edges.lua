@@ -112,6 +112,31 @@ T["wiping the buffer mid-request drops the answer quietly"] = function()
   eq(panel_text():find("Process", 1, true), nil)
 end
 
+T["wiping the buffer while the server finds nothing is quiet (live and gag)"] = function()
+  for _, use_float in ipairs({ false, true }) do
+    H.reset()
+    vim.v.errmsg = ""
+    go_buffer({
+      handlers = {
+        ["textDocument/prepareCallHierarchy"] = function()
+          return nil -- inside a body, not on a call: the enclosing-function fallback runs next
+        end,
+      },
+      delay = { ["textDocument/prepareCallHierarchy"] = 80 },
+    })
+    setup({ live = { enabled = not use_float } })
+    if use_float then
+      require("spoor").bowtie()
+    else
+      move()
+    end
+    vim.wait(30)
+    vim.cmd("bwipeout!")
+    vim.wait(300)
+    eq(vim.v.errmsg, "")
+  end
+end
+
 T["the server stopping mid-request leaves no error and recovers"] = function()
   local _, bufnr, server = go_buffer({ delay = { ["callHierarchy/incomingCalls"] = "never" } })
   setup({ timeout = 200 })
@@ -443,6 +468,33 @@ T["health finds the code buffer when :checkhealth opens in a float"] = function(
   vim.g.health = nil
   expect.no_equality(out:find("fake: ✓ prepareCallHierarchy", 1, true), nil)
   vim.cmd("close")
+end
+
+T["trail steps on non-file URIs (jdt://) open instead of warning"] = function()
+  require("spoor.config").setup({})
+  local msgs = {}
+  local orig = vim.notify
+  vim.notify = function(m)
+    msgs[#msgs + 1] = m
+  end
+  vim.cmd("edit " .. H.go .. "/internal/order/order.go")
+  local node = {
+    id = "jdt",
+    name = "Thing",
+    kind = 12,
+    uri = "jdt://contents/rt.jar/java.lang/Object.class",
+    range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 5 } },
+    selection = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 5 } },
+    tags = {},
+  }
+  pcall(require("spoor.trace").start, node, { root = H.go, origin = vim.api.nvim_get_current_win() })
+  vim.wait(50)
+  vim.notify = orig
+  require("spoor.trace").close()
+  for _, m in ipairs(msgs) do
+    eq(m:find("moved or deleted", 1, true), nil)
+  end
+  vim.v.errmsg = ""
 end
 
 -- Changes ----------------------------------------------------------------------

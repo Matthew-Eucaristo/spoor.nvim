@@ -237,8 +237,9 @@ local function show(node)
   if not (win and vim.api.nvim_win_is_valid(win)) then
     return
   end
+  -- only files can go missing; jdt://, deno: and friends are opened by their own handlers
   local path = vim.uri_to_fname(node.uri)
-  if not vim.uv.fs_stat(path) then
+  if node.uri:find("^file:") and not vim.uv.fs_stat(path) then
     return util.notify(vim.fn.fnamemodify(path, ":~:.") .. " was moved or deleted", vim.log.levels.WARN)
   end
   vim.api.nvim_win_call(win, function()
@@ -351,7 +352,8 @@ function M.pick(k)
       end
       return a.label < b.label
     end)
-    table.insert(choices, 1, { label = node.name .. " (the interface itself)", loc = nil })
+    -- implementations first, so <CR> follows the code that runs; the declaration stays reachable
+    choices[#choices + 1] = { label = node.name .. " (the interface itself)", loc = nil }
     return vim.ui.select(choices, {
       prompt = node.name .. " has " .. #node.implementations .. " implementations",
       format_item = function(c)

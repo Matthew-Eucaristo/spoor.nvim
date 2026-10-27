@@ -6,12 +6,16 @@ export XDG_CACHE_HOME := $(CURDIR)/.tests/cache
 
 .PHONY: test e2e smoke lint format clean
 
+# Errors in scheduled callbacks don't fail a test case, so any traceback in the output fails the run.
+RUN = mkdir -p .tests && $(NVIM) --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run({ collect = { find_files = function() return vim.fn.globpath('$(1)', 'test_*.lua', true, true) end } })" > .tests/$(2).log 2>&1; status=$$?; cat .tests/$(2).log; \
+	if grep -qE 'stack traceback|E5108' .tests/$(2).log; then echo "error leaked from a callback (see above)"; exit 1; fi; exit $$status
+
 test: $(DEPS)
-	$(NVIM) --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run({ collect = { find_files = function() return vim.fn.globpath('tests', 'test_*.lua', true, true) end } })"
+	@$(call RUN,tests,test)
 
 # Real language servers on tests/fixtures; each test skips when its server is missing.
 e2e: $(DEPS)
-	$(NVIM) --headless --noplugin -u tests/minimal_init.lua -c "lua MiniTest.run({ collect = { find_files = function() return vim.fn.globpath('tests/e2e', 'test_*.lua', true, true) end } })"
+	@$(call RUN,tests/e2e,e2e)
 
 # spoor in real configs (minimal, plain lazy.nvim, stock LazyVim) on $(NVIM)
 smoke: $(DEPS)
