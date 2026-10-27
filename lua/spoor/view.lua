@@ -263,6 +263,8 @@ M.base_actions = {
     end
   end,
   help = function(v)
+    -- snacks places its help above the window's zindex, which a split doesn't have
+    v.win.opts.zindex = v.win.opts.zindex or 50
     v.win:toggle_help()
   end,
   yank = function(v)

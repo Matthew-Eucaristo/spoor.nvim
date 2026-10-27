@@ -147,4 +147,32 @@ T["a narrow trail window keeps the label and cuts old crumbs"] = function()
   eq(bar.str:sub(1, 13), " spoor trace ")
 end
 
+T["a dead end says how to turn around"] = function()
+  local trail = require("spoor.model").trail("/p", {
+    id = "a",
+    name = "leaf",
+    kind = 12,
+    uri = "file:///p/a.go",
+    range = { start = { line = 0, character = 0 }, ["end"] = { line = 1, character = 0 } },
+    selection = { start = { line = 0, character = 5 }, ["end"] = { line = 0, character = 9 } },
+    tags = {},
+  })
+  require("spoor.config").setup({})
+  local r = require("spoor.trace").render(trail, {}, { width = 60, dir = "out", graph = { nodes = {} } })
+  expect.no_equality(table.concat(r.lines, "\n"):find("i show callers instead", 1, true), nil)
+end
+
+T["g? in the trail panel shows help"] = function()
+  start()
+  local s = require("spoor.trace").state
+  vim.api.nvim_set_current_win(s.win.win)
+  vim.v.errmsg = ""
+  vim.api.nvim_feedkeys(vim.keycode("g?"), "x", false)
+  eq(vim.v.errmsg, "")
+  local help = vim.tbl_filter(function(w)
+    return vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_win_help"
+  end, vim.api.nvim_tabpage_list_wins(0))
+  eq(#help, 1)
+end
+
 return T

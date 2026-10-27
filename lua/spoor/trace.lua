@@ -156,6 +156,10 @@ function M.render(trail, hops, opts)
   end
   if opts.loading and #hops == 0 then
     push(line():add("     ⋯", "SpoorMessage"), {})
+  elseif not opts.loading and k == 0 then
+    -- a dead end: say how to turn around
+    local other = opts.dir == "in" and "callees" or "callers"
+    push(line():add("     ", "SpoorDim"):add("i", "SpoorKey"):add(" show " .. other .. " instead", "SpoorDim"), {})
   end
   local hidden = {}
   for reason, n in pairs(opts.hidden or {}) do
@@ -469,6 +473,7 @@ local actions = {
   end,
   help = function()
     if valid() then
+      M.state.win.opts.zindex = M.state.win.opts.zindex or 50 -- a split has none; snacks needs one
       M.state.win:toggle_help()
     end
   end,

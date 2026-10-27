@@ -263,6 +263,20 @@ T["opening the panel never moves the code cursor (splitkeep=screen)"] = function
   vim.o.splitkeep, vim.o.lines = keep, lines
 end
 
+T["g? in the bottom panel shows help"] = function()
+  go_buffer()
+  setup()
+  move()
+  H.wait(function()
+    return panel_text():find("Emit", 1, true) ~= nil
+  end, 3000, "panel")
+  local v = panel()
+  vim.api.nvim_set_current_win(v.win.win)
+  local ok, err = pcall(require("spoor.live").actions.help, v)
+  eq(ok, true, err)
+  v.win:toggle_help()
+end
+
 T["setup twice keeps one set of autocmds and keys"] = function()
   setup()
   setup()
