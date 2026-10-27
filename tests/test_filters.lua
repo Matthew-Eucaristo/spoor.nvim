@@ -23,8 +23,8 @@ T["relative: Windows backslashes, drive letters and case"] = function()
   eq({ util.relative([[C:\Users\dev\app]], "C:/Users/dev/app") }, { ".", true })
   eq(select(2, util.relative([[D:\other\x.go]], [[C:\Users\dev\app]])), false)
   eq(select(2, util.relative([[C:\Users\dev\app2\x.go]], [[C:\Users\dev\app]])), false)
-  -- POSIX paths stay as they are, backslash and all
-  eq({ util.relative("/w/app/a\\b.go", "/w/app") }, { "a\\b.go", true })
+  -- POSIX paths keep a backslash as part of the name; on Windows it is a separator
+  eq({ util.relative("/w/app/a\\b.go", "/w/app") }, { util.windows and "a/b.go" or "a\\b.go", true })
   eq(tags([[C:\w\app\node_modules\react\index.js]], [[C:\w\app]]).external, true)
   eq(tags([[C:\w\app\internal\order_test.go]], "C:/w/app").test, true)
 end
