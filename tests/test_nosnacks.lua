@@ -179,7 +179,11 @@ T["K grows the card without snacks too, and a hover with no room left is fine"] 
     return shown(panel())
   end, 3000, "card again")
   vim.cmd("redraw")
-  hover = vim.api.nvim_open_win(buf, false, { relative = "editor", row = 0, col = 0, width = vim.o.columns, height = vim.o.lines - 3 })
+  hover = vim.api.nvim_open_win(
+    buf,
+    false,
+    { relative = "editor", row = 0, col = 0, width = vim.o.columns, height = vim.o.lines - 3 }
+  )
   vim.api.nvim_win_set_config(hover, { relative = "cursor", row = -(vim.fn.winline() - 1), col = 0 })
   vim.wait(500)
   vim.api.nvim_win_close(hover, true)
