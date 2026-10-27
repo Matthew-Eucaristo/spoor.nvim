@@ -1,0 +1,274 @@
+--- A window that shows one bow-tie: the live panel and the gag float share it.
+local Config = require("spoor.config")
+local render = require("spoor.render")
+
+local M = {}
+
+local ns = vim.api.nvim_create_namespace("spoor")
+M.ns = ns
+
+---@class spoor.View
+---@field win snacks.win
+---@field graph? spoor.Graph
+---@field rendered? spoor.Rendered
+---@field origin integer window to jump in
+---@field show_all boolean
+---@field opts spoor.ViewOpts
+---@field client? vim.lsp.Client
+---@field group? spoor.Group requests of the bow-tie being loaded
+---@field load_opts? spoor.LoadOpts
+---@field history? spoor.Graph[] float: previous roots for <BS>
+---@field placed? integer[] float: where spoor last put the cursor (on the focus)
+---@field stale? boolean
+---@field key? string live: cache key of the focus shown
+---@field closing? boolean closed by spoor, not by hand
+---@field user_quit? boolean live: :q was typed in the panel
+local View = {}
+View.__index = View
+
+---@class spoor.ViewOpts
+---@field kind "panel"|"float"
+---@field win snacks.win.Config|{}
+---@field max_items integer
+---@field max_rows? integer
+---@field actions table<string, fun(view: spoor.View)>
+---@field keys table<string, {[1]: string, desc: string}>
+
+---@param opts spoor.ViewOpts
+---@return spoor.View
+function M.new(opts)
+  local self = setmetatable({ opts = opts, show_all = false, origin = vim.api.nvim_get_current_win() }, View)
+  local keys = {}
+  for lhs, spec in pairs(opts.keys) do
+    local action = opts.actions[spec[1]]
+    keys[lhs] = {
+      lhs,
+      function()
+        action(self)
+      end,
+      desc = spec.desc,
+      mode = "n",
+    }
+  end
+  self.win = Snacks.win(vim.tbl_deep_extend("force", {
+    show = false,
+    enter = false,
+    fixbuf = true,
+    ft = "spoor",
+    bo = { modifiable = false, filetype = "spoor" },
+    wo = { wrap = false, cursorline = true },
+    keys = keys,
+  }, opts.win))
+  return self
+end
+
+function View:valid()
+  return self.win ~= nil and self.win:valid() == true
+end
+
+function View:show()
+  if not self:valid() then
+    self.win:show()
+  end
+  return self
+end
+
+function View:width()
+  if self:valid() then
+    return vim.api.nvim_win_get_width(self.win.win)
+  end
+  return vim.o.columns
+end
+
+--- Render a graph into the window.
+---@param g spoor.Graph
+function View:render(g)
+  self.graph = g
+  if not self.win:buf_valid() then
+    return
+  end
+  local total = self:width() - 1
+  local width = math.min(total, 160)
+  local r = render.bowtie(g, {
+    width = width,
+    offset = math.floor((total - width) / 2),
+    max_items = self.opts.max_items,
+    max_rows = self.opts.max_rows,
+    show_all = self.show_all,
+  })
+  self.rendered = r
+  local buf = self.win.buf
+  vim.bo[buf].modifiable = true
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, r.lines)
+  vim.bo[buf].modifiable = false
+  vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  for _, h in ipairs(r.hls) do
+    vim.api.nvim_buf_set_extmark(buf, ns, h.row, h.col, { end_col = h.end_col, hl_group = h.group })
+  end
+  self:decorate(r)
+  if self.opts.kind == "float" then
+    self:fit(#r.lines)
+    -- follow the focus row as rows arrive, until you move the cursor yourself
+    local cur = vim.api.nvim_win_get_cursor(self.win.win)
+    if not self.placed or (cur[1] == self.placed[1] and cur[2] == self.placed[2]) then
+      for row = 1, #r.lines do
+        local m = r.map[row]
+        if m and m.focus then
+          local col = math.max(vim.fn.virtcol2col(self.win.win, row, r.cols.left_end + 5) - 1, 0)
+          if pcall(vim.api.nvim_win_set_cursor, self.win.win, { row, col }) then
+            self.placed = vim.api.nvim_win_get_cursor(self.win.win)
+          end
+          break
+        end
+      end
+    end
+  end
+end
+
+--- Size the float to its content and keep it centered.
+---@param n integer
+function View:fit(n)
+  if not self:valid() then
+    return
+  end
+  local h = math.max(math.min(n, math.floor(vim.o.lines * 0.8)), 4)
+  local cfg = vim.api.nvim_win_get_config(self.win.win)
+  if cfg.height ~= h then
+    vim.api.nvim_win_set_config(self.win.win, {
+      relative = "editor",
+      height = h,
+      width = cfg.width,
+      row = math.floor((vim.o.lines - h) / 2) - 1,
+      col = cfg.col,
+    })
+  end
+end
+
+--- Title/footer (float) or winbar (panel).
+---@param r spoor.Rendered
+function View:decorate(r)
+  if not self:valid() then
+    return
+  end
+  local legend = r.legend
+  if self.opts.kind == "panel" then
+    local parts = { "%#SpoorHeader# spoor %*" .. (self.stale and "%#SpoorDim#(paused) %*" or "") .. "%<" }
+    for _, chunk in ipairs(legend) do
+      parts[#parts + 1] = ("%%#%s#%s%%*"):format(chunk[2], chunk[1]:gsub("%%", "%%%%"))
+    end
+    if self:width() >= 110 then
+      parts[#parts + 1] = "%=%#SpoorDim#<CR> jump  t trace  H hidden  g? help %*"
+    end
+    vim.wo[self.win.win].winbar = table.concat(parts)
+  else
+    local focus = self.graph.nodes[self.graph.focus]
+    vim.api.nvim_win_set_config(self.win.win, {
+      title = { { " spoor ", "SpoorHeader" }, { "· " .. focus.name .. " ", "SpoorFocus" } },
+      title_pos = "center",
+      footer = legend,
+      footer_pos = "center",
+    })
+  end
+end
+
+--- Mark the content as paused (the cursor is somewhere spoor can't follow).
+function View:set_stale(stale)
+  if self.stale ~= stale then
+    self.stale = stale
+    if self.rendered then
+      self:decorate(self.rendered)
+    end
+  end
+end
+
+--- The node under the cursor.
+---@return spoor.Node?, "left"|"right"|"focus"|nil
+function View:node_at_cursor()
+  if not (self.rendered and self:valid()) then
+    return nil
+  end
+  local cursor = vim.api.nvim_win_get_cursor(self.win.win)
+  local line = vim.api.nvim_buf_get_lines(self.win.buf, cursor[1] - 1, cursor[1], false)[1] or ""
+  local col = vim.api.nvim_strwidth(line:sub(1, cursor[2]))
+  local id, side = render.hit(self.rendered, cursor[1], col, self.graph.focus)
+  return id and self.graph.nodes[id] or nil, side
+end
+
+--- Put the cursor on the first node of a side.
+---@param side "left"|"right"
+function View:goto_side(side)
+  if not (self.rendered and self:valid()) then
+    return
+  end
+  local vcol = side == "left" and 2 or self.rendered.cols.right_start + 1
+  local cur = vim.api.nvim_win_get_cursor(self.win.win)[1]
+  local byte = vim.fn.virtcol2col(self.win.win, cur, vcol)
+  vim.api.nvim_win_set_cursor(self.win.win, { cur, math.max(byte - 1, 0) })
+end
+
+--- Open a node's location in the origin window.
+---@param node spoor.Node
+function View:jump(node)
+  local win = self.origin
+  if not vim.api.nvim_win_is_valid(win) then
+    win = vim.fn.win_getid(vim.fn.winnr("#"))
+  end
+  if vim.api.nvim_win_is_valid(win) then
+    vim.api.nvim_set_current_win(win)
+  end
+  local encoding = self.graph and self.graph.encoding or "utf-16"
+  vim.lsp.util.show_document({ uri = node.uri, range = node.selection }, encoding, { focus = true })
+  vim.cmd("normal! zz")
+end
+
+function View:close()
+  if self.win then
+    self.win:close()
+  end
+end
+
+M.View = View
+
+--- Default keys for both views. Actions are filled in by live.lua and float.lua.
+M.keys = {
+  ["<CR>"] = { "jump", desc = "Jump to node" },
+  ["<2-LeftMouse>"] = { "jump", desc = "Jump to node" },
+  ["<Tab>"] = { "expand", desc = "Open one more level" },
+  ["."] = { "reroot", desc = "Re-root on node" },
+  ["t"] = { "trace", desc = "Start a trace here" },
+  ["H"] = { "toggle_hidden", desc = "Show/hide external, generated, tests" },
+  ["R"] = { "retry", desc = "Retry" },
+  ["h"] = { "left", desc = "Callers column" },
+  ["l"] = { "right", desc = "Callees column" },
+  ["y"] = { "yank", desc = "Copy as Mermaid" },
+  ["g?"] = { "help", desc = "Help" },
+}
+
+M.base_actions = {
+  left = function(v)
+    v:goto_side("left")
+  end,
+  right = function(v)
+    v:goto_side("right")
+  end,
+  toggle_hidden = function(v)
+    v.show_all = not v.show_all
+    if v.graph then
+      v:render(v.graph)
+    end
+  end,
+  help = function(v)
+    v.win:toggle_help()
+  end,
+  yank = function(v)
+    if v.graph then
+      local text = require("spoor.export").bowtie_mermaid(v.graph, { show_all = v.show_all })
+      vim.fn.setreg("+", text)
+      vim.fn.setreg('"', text)
+      require("spoor.util").notify("Copied the bow-tie as Mermaid")
+    end
+  end,
+}
+
+M.Config = Config
+return M

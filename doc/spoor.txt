@@ -1,0 +1,243 @@
+*spoor.txt*  Follow the trail through a codebase
+
+==============================================================================
+CONTENTS                                                      *spoor-contents*
+
+  1. Introduction .......................................... |spoor-intro|
+  2. Install ............................................. |spoor-install|
+  3. Live bow-tie ........................................... |spoor-live|
+  4. Bow-tie float ........................................ |spoor-bowtie|
+  5. Trace mode ............................................ |spoor-trace|
+  6. Changed symbols ..................................... |spoor-changes|
+  7. Entry points ........................................ |spoor-entries|
+  8. Edges, badges and frameworks .......................... |spoor-edges|
+  9. Commands ........................................... |spoor-commands|
+ 10. Configuration ........................................ |spoor-config|
+ 11. Highlights ....................................... |spoor-highlights|
+ 12. Lua API and data model ................................. |spoor-api|
+ 13. Files ................................................. |spoor-files|
+
+==============================================================================
+1. INTRODUCTION                                                  *spoor-intro*
+
+spoor shows the callers and callees of the function under the cursor (the
+"bow-tie"), lets you walk a call path one hop at a time while keeping notes
+(a "trail"), and lists the symbols changed since a git ref with their
+bow-ties. Data comes from your language server's call hierarchy and from git.
+spoor has no AI, builds no index, and makes no network requests.
+
+==============================================================================
+2. INSTALL                                                     *spoor-install*
+
+Requires Neovim 0.11+, snacks.nvim, git, and a language server that supports
+`textDocument/prepareCallHierarchy`. With lazy.nvim / LazyVim: >lua
+
+    return {
+      "Matthew-Eucaristo/spoor.nvim",
+      event = "VeryLazy",
+      dependencies = { "folke/snacks.nvim" },
+      opts = {},
+    }
+<
+Run |:checkhealth| `spoor` to see what each attached server supports.
+
+==============================================================================
+3. LIVE BOW-TIE                                                   *spoor-live*
+
+When the cursor rests on a call or inside a function, a panel at the bottom
+shows: >
+    CALLERS 2                                       CALLEES 5
+    handleOrders  server.go:32 ──╮             ╭─▶ validate
+    TestProcess  order_test.go ──┤             ├─▶ applyDiscount
+                                 ╰─▶ Process ──┼─▶ subtotal
+                                               ├─▶ Save ◇3
+                                               ╰─▶ Emit
+<
+On a call, the focus is the called function. Anywhere else in a body, it is
+the enclosing function. Requests are debounced (`live.debounce`), stale ones
+are cancelled, finished bow-ties are cached until you edit or save, and
+nothing is sent in insert mode.
+
+<leader>uB          Toggle the live bow-tie. The choice persists across
+                    sessions. `:q` in the panel pauses it for this session;
+                    `:only` or `:tabclose` just close it until the cursor
+                    rests again.
+
+Panel keys: <CR> jump, h / l columns, <Tab> open the float on the node,
+t trace from the node, H show hidden, R retry, y copy as Mermaid,
+q turn live off, g? help.
+
+==============================================================================
+4. BOW-TIE FLOAT                                    *spoor-bowtie* *spoor-gag*
+
+gag                 Open a focused float at the cursor with `float.depth`
+                    levels per side (callers of callers, callees of callees).
+
+Float keys: <CR> jump and close, <Tab> open or fold one more level on the
+node, . re-root on the node, <BS> back to the previous root, t trace,
+H show hidden, R retry, y copy as Mermaid, q / <Esc> close, g? help.
+
+==============================================================================
+5. TRACE MODE                                          *spoor-trace* *spoor-gat*
+
+gat                 Start a trail at the cursor.
+<leader>ct          Resume the last trail in this project.
+<leader>cT          Pick a trail; <c-x> in the picker deletes one.
+
+A panel opens beside the code window with the trail so far and the next hops,
+numbered 1-9. Taking a hop shows that code in the code window and keeps focus
+in the panel. When a hop is an interface method (◇N), you choose the
+implementation; project code comes first and tests last.
+
+Trace keys: 1-9 or <CR> take a hop (<CR> on a step shows it), <BS> step
+back, n note on the step under the cursor (the newest by default), i switch
+between callees and callers, <C-q> trail to quickfix, m copy as Mermaid,
+q close, g? help.
+
+Trails are saved after every change. See |spoor-files|.
+
+==============================================================================
+6. CHANGED SYMBOLS                                              *spoor-changes*
+
+<leader>cG          List symbols changed since a ref, each with its bow-tie
+                    in the preview.
+
+The ref is `changes.base` when set. Otherwise it is the merge-base with the
+default branch (origin/HEAD, main, master, trunk or develop), or HEAD when
+you are on that branch. Untracked files count as new. A symbol is "new" when
+its declaration line was added and its name does not appear in the old file.
+New functions show their caller count, and `⚠ 0 callers` marks the ones
+nothing calls.
+
+Changed files are loaded into hidden, unlisted buffers so their language
+server can answer.
+
+==============================================================================
+7. ENTRY POINTS                                                 *spoor-entries*
+
+<leader>ce          Pick an entry point; functions start a trace.
+
+Found with `git ls-files` and `git grep`: Go `main` and HTTP route
+registrations, Next.js app and pages router files and route handlers,
+package.json bin/main/scripts, Python `__main__`, route decorators and
+[project.scripts], Dart `main` (→ runApp), JVM `main` and Spring mappings,
+Rust `fn main`.
+
+==============================================================================
+8. EDGES, BADGES AND FRAMEWORKS                                   *spoor-edges*
+
+Every edge is a static call reported by the language server. spoor then
+reads each call site to label it:
+
+  ◇N       the callee is an interface or abstract method with N
+           implementations (textDocument/implementation)
+  ~        the function is used as a value at that site (a handler,
+           callback or prop), not called
+  </>      JSX: rendered as a component
+  ×N       N call sites
+  ⚑        the focus is invoked by a framework or runtime: Go main/init/
+           tests/HTTP handlers, Next.js pages/routes/actions, React
+           components and hooks, Flutter build()/lifecycle, Python routes,
+           tasks and tests, JVM main/Spring/JUnit
+
+Static analysis can't see calls made through dependency-injection containers,
+reflection or message buses. A function with no static callers shows
+"no static callers · framework or dynamic entry?" and spoor asks for its
+value references so you can see where it is registered.
+
+==============================================================================
+9. COMMANDS                                                    *spoor-commands*
+
+                                                                      *:Spoor*
+:Spoor bowtie        Same as |spoor-gag|.
+:Spoor trace         Same as |spoor-gat|.
+:Spoor resume        Resume the last trail.
+:Spoor trails        Pick a trail.
+:Spoor entries       Pick an entry point.
+:Spoor changes [ref] Changed symbols since [ref].
+:Spoor live [on|off] Turn the live bow-tie on or off; no argument toggles.
+:Spoor graph         Print the current bow-tie as JSON.
+:Spoor trail         Print the current trail as JSON.
+
+==============================================================================
+10. CONFIGURATION                                                *spoor-config*
+
+Pass a table to `require("spoor").setup()` (`opts` in lazy.nvim). Defaults:
+>lua
+    {
+      live = { enabled = true, debounce = 120, layout = "bottom",
+               height = 8, max_items = 6 },
+      float = { width = 0.86, depth = 2, max_items = 12 },
+      timeout = 1500,        -- per request, ms
+      cold_timeout = 15000,  -- while a server is still indexing
+      max_nodes = 60,
+      implementations = true,
+      max_implementation_lookups = 8,
+      references = true,
+      servers = {
+        dartls = { depth = 1, timeout = 20000, live_callers = false },
+      },
+      hide = { external = true, generated = true, tests = false },
+      exclude = {},          -- Lua patterns on project-relative paths
+      frameworks = true,
+      trace = { width = 58, max_hops = 9 },
+      changes = { base = nil, max_files = 60 },
+      keys = { bowtie = "gag", trace = "gat", resume = "<leader>ct",
+               trails = "<leader>cT", entries = "<leader>ce",
+               changes = "<leader>cG", toggle = "<leader>uB" },
+      icons = { ... },       -- see lua/spoor/config.lua
+    }
+<
+`servers.<name>` applies per language server: `timeout`, `depth`, and
+`live_callers = false`, which makes the live panel skip the caller search
+until you press R. Set a key to false to skip it, or `keys = false` to set no
+global keys.
+
+==============================================================================
+11. HIGHLIGHTS                                               *spoor-highlights*
+
+All groups are defined with `default = true` and link to standard groups:
+SpoorHeader (Title), SpoorName (Function), SpoorFocus (bold Function),
+SpoorLoc (Comment), SpoorEdge (Comment), SpoorBadge (Special),
+SpoorInterface (Type), SpoorValue (Special), SpoorFramework (DiagnosticInfo),
+SpoorWarn (DiagnosticWarn), SpoorMessage, SpoorMore, SpoorDim (Comment),
+SpoorNote (String), SpoorKey (Special), SpoorHere (DiagnosticOk),
+SpoorAdd (Added), SpoorChange (Changed).
+
+==============================================================================
+12. LUA API AND DATA MODEL                                          *spoor-api*
+
+require("spoor").setup({opts})       Configure and map keys.
+require("spoor").bowtie()            Open the float.
+require("spoor").trace()             Trace from the cursor.
+require("spoor").resume()            Resume the last trail.
+require("spoor").trails()            Trail picker.
+require("spoor").entries()           Entry-point picker.
+require("spoor").changes({ref})      Changed-symbols picker.
+require("spoor").toggle({on})        Live on/off; nil toggles.
+require("spoor").current_graph()     Current bow-tie as JSON-ready data.
+require("spoor").current_trail()     Current trail as JSON-ready data.
+
+Graph: `{ version, focus, server, nodes = { { id, name, kind, path, range,`
+`selection, tags, impls?, framework? } }, edges = { { from, to, kind,`
+`sites, source } } }`. Edge kinds: "call", "jsx", "ref". Ids look like
+"internal/order/order.go#24:5" (0-based line:column), with paths relative to
+the project root.
+
+Trail: `{ version, title, created, updated, steps = { { name, kind, path,`
+`line, via, note, framework } } }`.
+
+                                                                  *SpoorTrail*
+The `User SpoorTrail` autocommand fires after a trail is saved, with
+`data.trail` set to the raw trail.
+
+==============================================================================
+13. FILES                                                         *spoor-files*
+
+spoor writes only to `stdpath("state")/spoor/`:
+  state.json                  whether the live bow-tie is on
+  trails/<project>-<hash>.json trails and notes for each project
+
+Delete that folder to forget everything. spoor never writes to your project.
+
+ vim:tw=78:ts=8:ft=help:norl:

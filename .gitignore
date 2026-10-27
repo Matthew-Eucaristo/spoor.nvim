@@ -1,0 +1,4 @@
+/deps/
+/.tests/
+.DS_Store
+/doc/tags
