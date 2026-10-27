@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 - Unreleased
+## 1.1.0 - 2026-10-27
 
 - The live bow-tie is now a card next to the cursor by default, like an always-on hover (`live.layout = "cursor"`). It sits above the cursor line (below near the top), never takes focus, steps aside for hover, signature and diagnostic floats, and hides while you type. `live.layout = "bottom"` brings back the panel.
 - `gag` previews: moving through the bow-tie shows each function's code in the code window; `<CR>` goes there, `<Esc>` puts the window back. Buffers opened only to preview are not listed and are wiped again.
