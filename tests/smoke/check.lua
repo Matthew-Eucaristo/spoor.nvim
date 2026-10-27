@@ -129,6 +129,8 @@ local ok, err = xpcall(function()
     fail(":h spoor not found")
   end
   pcall(vim.cmd, "helpclose")
+  -- a help split under splitkeep=screen (LazyVim) moves the code cursor; put it back
+  vim.api.nvim_win_set_cursor(code_win, { p.line + 1, p.character })
 
   -- health names this buffer's server
   vim.api.nvim_set_current_win(code_win)
