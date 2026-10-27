@@ -7,10 +7,10 @@ M.defaults = {
   live = {
     enabled = true, -- first-run default; the <leader>uB toggle persists your choice
     debounce = 120, -- ms the cursor must rest before spoor asks the language server
-    layout = "peek", -- "peek" (small card in the top-right corner), "bottom" (split panel) or "float"
+    layout = "cursor", -- "cursor" (a card next to the cursor, like hover), "bottom" (split panel) or "float"
     height = 8, -- bottom panel rows, header included
     max_items = 6, -- bottom panel: rows per side before "+N more"
-    peek = { width = 64, max_items = 4 }, -- the corner card; gag opens the full float
+    card = { width = 64, max_items = 4 }, -- the cursor card; gag opens the full bow-tie
   },
   -- The on-demand float (gag) with deeper levels.
   float = {

@@ -6,7 +6,7 @@ Follow the trail through a codebase without leaving LazyVim. spoor shows who cal
 
 A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the same way: pick a focus, look at its neighbours, follow one path, and write down what they learn. The slow part is not following calls but losing the trail. spoor makes that cheap:
 
-- **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. A small card in the top-right corner follows the cursor; it never takes focus, moves out of the cursor's way and hides while you type. `gag` opens the full bow-tie two levels deep: moving through it shows each function's code above, `<CR>` goes there and `<Esc>` puts you back. `<C-v>`, `<C-s>` or `<C-t>` keep it open in a split or a tab of its own.
+- **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. A small card next to the cursor shows them as you move, like an always-on hover: it never takes focus or covers the line you are on, steps aside for `K` hover, signature help and diagnostics, and hides while you type. `gag` opens the full bow-tie two levels deep: moving through it shows each function's code above, `<CR>` goes there and `<Esc>` puts you back. `<C-v>`, `<C-s>` or `<C-t>` keep it open in a split or a tab of its own.
 - **Trace mode.** `gat` walks one hop at a time while the code opens beside you. Add notes as you go and resume the trail tomorrow with `<leader>ct`.
 - **What did the agent change?** `<leader>cG` lists the functions touched since the branch point, each with its bow-tie. A new function with no callers is flagged, because that is often the first sign an agent went off track.
 - **Entry points.** `<leader>ce` finds `main` functions, HTTP routes, Next.js pages and route handlers, Flutter `main → runApp`, and package scripts. Picking one starts a trace there.
@@ -140,10 +140,10 @@ These are the defaults. Pass only what you want to change in `opts`.
   live = {
     enabled = true, -- first-run default; <leader>uB remembers your choice
     debounce = 120, -- ms the cursor must rest
-    layout = "peek", -- "peek" card in the top-right corner, "bottom" panel, or "float"
+    layout = "cursor", -- "cursor" card (like hover), "bottom" panel, or "float" in a corner
     height = 8, -- bottom panel
     max_items = 6, -- bottom panel: rows per side before "+N more"
-    peek = { width = 64, max_items = 4 },
+    card = { width = 64, max_items = 4 },
   },
   float = {
     width = 0.86,

@@ -18,7 +18,7 @@ local function quit(where, cmd, layout)
   return res.code
 end
 
-for _, layout in ipairs({ "peek", "bottom" }) do
+for _, layout in ipairs({ "cursor", "bottom" }) do
   for _, case in ipairs({
     { "trace", "qa!" },
     { "trace", "qa" },

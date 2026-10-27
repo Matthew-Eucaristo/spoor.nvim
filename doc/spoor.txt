@@ -58,9 +58,9 @@ Run |:checkhealth| `spoor` to see what each attached server supports.
 ==============================================================================
 3. LIVE BOW-TIE                                                   *spoor-live*
 
-When the cursor rests on a call or inside a function, a card in the top-right
-corner shows the bow-tie (with `live.layout = "bottom"`, a panel at the
-bottom): >
+When the cursor rests on a call or inside a function, a card next to the
+cursor shows the bow-tie, like an always-on hover (with `live.layout =
+"bottom"`, a panel at the bottom): >
     CALLERS 2                                       CALLEES 5
     handleOrders  server.go:32 ──╮             ╭─▶ validate
     TestProcess  order_test.go ──┤             ├─▶ applyDiscount
@@ -71,9 +71,10 @@ bottom): >
 On a call, the focus is the called function. Anywhere else in a body, it is
 the enclosing function. Requests are debounced (`live.debounce`), stale ones
 are cancelled, finished bow-ties are cached until you edit or save, and
-nothing is sent in insert mode. The card never takes focus, moves to the
-bottom corner when it would cover the cursor, and hides while you type or when
-the cursor is not in a function. Use |spoor-gag| to interact with it.
+nothing is sent in insert mode. The card sits just above the cursor line (below
+it near the top of the window), never takes focus, steps aside while a hover,
+signature or diagnostic float is open at the cursor, and hides while you type
+or when the cursor is not in a function. Use |spoor-gag| to interact with it.
 
 <leader>uB          Toggle the live bow-tie. The choice persists across
                     sessions. `:q` in the panel pauses it for this session;
@@ -187,9 +188,9 @@ value references so you can see where it is registered.
 Pass a table to `require("spoor").setup()` (`opts` in lazy.nvim). Defaults:
 >lua
     {
-      live = { enabled = true, debounce = 120, layout = "peek",
+      live = { enabled = true, debounce = 120, layout = "cursor",
                height = 8, max_items = 6,
-               peek = { width = 64, max_items = 4 } },
+               card = { width = 64, max_items = 4 } },
       float = { width = 0.86, depth = 2, max_items = 12, preview = true },
       timeout = 1500,        -- per request, ms
       cold_timeout = 15000,  -- while a server is still indexing

@@ -80,22 +80,33 @@ function M.close_all()
   end
 end
 
---- The corner card has nothing to say right now (insert mode, no function, another window).
-local function hide_peek()
+--- The card has nothing to say right now (insert mode, no function, another window or float).
+local function hide_card()
   local tab = vim.api.nvim_get_current_tabpage()
   local v = M.panels[tab]
-  if v and v.opts.kind == "peek" then
+  if v and v.opts.kind == "card" then
     v.closing = true
     v:close()
     M.panels[tab] = nil
   end
 end
-M.hide_peek = hide_peek
+M.hide_card = hide_card
 
 ---@param v spoor.View
 local function own_panel(win)
   for _, v in pairs(M.panels) do
     if v:valid() and v.win.win == win then
+      return true
+    end
+  end
+  return false
+end
+
+--- Is a hover, signature or diagnostic float open at the cursor? The card steps aside for it.
+local function cursor_float()
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local rel = vim.api.nvim_win_get_config(w).relative
+    if (rel == "cursor" or rel == "win") and not own_panel(w) then
       return true
     end
   end
@@ -159,11 +170,11 @@ local function panel()
   local o = Config.options.live
   local float = o.layout == "float"
   local width = math.min(math.floor(vim.o.columns * 0.62), 140)
-  if o.layout == "peek" then
-    local w = math.min(o.peek.width, vim.o.columns - 4)
+  if o.layout == "cursor" then
+    local w = math.min(o.card.width, vim.o.columns - 4)
     v = view.new({
-      kind = "peek",
-      max_items = o.peek.max_items,
+      kind = "card",
+      max_items = o.card.max_items,
       actions = M.actions,
       keys = {},
       win = {
@@ -172,11 +183,11 @@ local function panel()
         width = w,
         height = 4,
         row = 1,
-        col = vim.o.columns - w - 3,
+        col = 1,
         border = "rounded",
         backdrop = false,
         focusable = false,
-        zindex = 20, -- below notifications and completion menus
+        zindex = 40, -- under hover (50), completion and notifications
         wo = { cursorline = false },
       },
     })
@@ -235,7 +246,7 @@ function M.update()
   end
   local win = vim.api.nvim_get_current_win()
   if not followable(win) then
-    return hide_peek()
+    return hide_card()
   end
   local bufnr = vim.api.nvim_win_get_buf(win)
   local client = lsp.client(bufnr)
@@ -244,7 +255,7 @@ function M.update()
     if existing and existing:valid() then
       existing:set_stale(true)
     end
-    return hide_peek()
+    return hide_card()
   end
   if M.group then
     M.group:cancel()
@@ -267,13 +278,16 @@ function M.update()
       if v and v:valid() then
         v:set_stale(true)
       end
-      return hide_peek()
+      return hide_card()
+    end
+    if Config.options.live.layout == "cursor" and cursor_float() then
+      return hide_card()
     end
     local key = key_for(item)
     if v and v:valid() and v.key == key then
-      if v.opts.kind == "peek" then
+      if v.opts.kind == "card" then
         v.origin = win
-        v:place_peek() -- keep it out of the cursor's way
+        v:place_card() -- follow the cursor
       end
       return v:set_stale(false)
     end
@@ -323,7 +337,20 @@ function M.setup()
       for _, g in ipairs({ M.group, bowtie.open_group, require("spoor.trace").start_group }) do
         g:cancel()
       end
-      hide_peek()
+      hide_card()
+    end,
+  })
+  -- a hover or diagnostic float opened at the cursor: hide the card; when it closes, come back
+  vim.api.nvim_create_autocmd({ "WinNew", "WinClosed" }, {
+    group = group,
+    callback = function(ev)
+      vim.schedule(function()
+        if ev.event == "WinNew" and cursor_float() then
+          hide_card()
+        elseif M.enabled() and not M.paused then
+          schedule()
+        end
+      end)
     end,
   })
   vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "BufWritePost" }, {

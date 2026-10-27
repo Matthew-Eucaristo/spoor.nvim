@@ -28,7 +28,7 @@ local View = {}
 View.__index = View
 
 ---@class spoor.ViewOpts
----@field kind "panel"|"float"|"peek"|"pinned" panel/peek: live; float: gag; pinned: a split or tab you moved the float to
+---@field kind "panel"|"float"|"card"|"pinned" panel/card: live; float: gag; pinned: a split or tab you moved the float to
 ---@field win snacks.win.Config|{}
 ---@field max_items integer
 ---@field max_rows? integer
@@ -112,8 +112,8 @@ function View:render(g)
     vim.api.nvim_buf_set_extmark(buf, ns, h.row, h.col, { end_col = h.end_col, hl_group = h.group })
   end
   self:decorate(r)
-  if self.opts.kind == "peek" then
-    return self:place_peek(#r.lines)
+  if self.opts.kind == "card" then
+    return self:place_card(#r.lines)
   end
   if self.opts.kind == "float" or self.opts.kind == "pinned" then
     if self.opts.kind == "float" then
@@ -157,33 +157,38 @@ function View:fit(n)
   end
 end
 
---- Size the corner card to its content: top-right, or bottom-right when it would cover the cursor.
+--- Size the card to its content and put it next to the cursor, like a hover: above the cursor
+--- line, or below it near the top of the window. It never covers the cursor's line.
 ---@param n? integer lines
-function View:place_peek(n)
+function View:place_card(n)
   if not self:valid() then
     return
   end
   n = n or (self.rendered and #self.rendered.lines) or 4
-  local cfg = vim.api.nvim_win_get_config(self.win.win)
-  local h = math.max(math.min(n, math.floor(vim.o.lines * 0.4)), 3)
-  local w = math.min(Config.options.live.peek.width, vim.o.columns - 4)
-  local col = vim.o.columns - w - 3
-  local row = 1
   local origin = self.origin
-  if vim.api.nvim_win_is_valid(origin) then
-    local pos = vim.api.nvim_win_call(origin, function()
-      return vim.fn.screenpos(0, vim.fn.line("."), vim.fn.col("."))
-    end)
-    if pos.row > 0 and pos.row <= row + h + 2 and pos.col >= col then
-      row = math.max(vim.o.lines - h - vim.o.cmdheight - 4, 1)
-    end
+  if not vim.api.nvim_win_is_valid(origin) then
+    return
   end
+  local h = math.max(math.min(n, math.floor(vim.o.lines * 0.4)), 3)
+  local w = math.min(Config.options.live.card.width, vim.o.columns - 4)
+  local info = vim.fn.getwininfo(origin)[1]
+  local pos = vim.api.nvim_win_call(origin, function()
+    return vim.fn.screenpos(0, vim.fn.line("."), vim.fn.col("."))
+  end)
+  local cursor_row = math.max(pos.row - 1, 0) -- 0-based screen row of the cursor
+  local above = cursor_row - (h + 2) -- the border takes a row on each side
+  local below = cursor_row + 1
+  local fits_below = below + h + 2 <= info.winrow - 1 + info.height
+  local row = (above >= info.winrow - 1 or not fits_below) and math.max(above, 0) or below
+  -- line up with the code, not the cursor, so the card doesn't slide sideways as you move
+  local col = math.min(info.wincol - 1 + info.textoff, vim.o.columns - w - 2)
+  local cfg = vim.api.nvim_win_get_config(self.win.win)
   if cfg.height ~= h or cfg.width ~= w or cfg.row ~= row or cfg.col ~= col then
     vim.api.nvim_win_set_config(self.win.win, { relative = "editor", row = row, col = col, width = w, height = h })
   end
 end
 
---- Title/footer (float, peek) or winbar (panel, pinned).
+--- Title/footer (float, card) or winbar (panel, pinned).
 ---@param r spoor.Rendered
 function View:decorate(r)
   if not self:valid() then
@@ -213,7 +218,7 @@ function View:decorate(r)
   else
     local focus = self.graph.nodes[self.graph.focus]
     local footer = legend
-    if self.opts.kind == "peek" then
+    if self.opts.kind == "card" then
       -- the card is a glance; say where the rest is
       footer = {
         { " " .. (self.graph.server or "lsp") .. " · ", "SpoorDim" },
