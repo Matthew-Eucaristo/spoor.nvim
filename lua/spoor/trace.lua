@@ -219,7 +219,8 @@ function M.redraw()
   local crumbs = vim.tbl_map(function(st)
     return st.node.name
   end, s.trail.steps)
-  vim.wo[s.win.win].winbar = "%#SpoorHeader# spoor trace %*%#SpoorDim#"
+  -- when narrow, cut the oldest crumbs, never the label
+  vim.wo[s.win.win].winbar = "%#SpoorHeader# spoor trace %*%<%#SpoorDim#"
     .. table.concat(crumbs, " ▸ "):gsub("%%", "%%%%")
     .. "%*"
 end

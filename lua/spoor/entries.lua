@@ -99,7 +99,7 @@ function M.detectors.go(root, files)
       local verb = (method == "HandleFunc" or method == "Handle") and "" or (method:upper() .. " ")
       out[#out + 1] = {
         lang = "route",
-        name = verb .. path,
+        name = verb .. (path ~= "" and path or "/"), -- "" is the root of a route group
         file = vim.fs.joinpath(root, hit.file),
         lnum = hit.lnum,
         col = M.handler_col(hit.text),
@@ -360,13 +360,22 @@ function M.find(root)
       vim.list_extend(out, found)
     end
   end
-  -- program entries first, then routes, then manifests
+  -- program entries first, then routes, then manifests; helper scripts in docs/, examples/,
+  -- generated or test code go last
   local rank = { go = 1, dart = 1, rust = 1, jvm = 1, py = 2, next = 3, route = 4, npm = 5 }
+  local filters = require("spoor.filters")
   for i, e in ipairs(out) do
     e.order = i
+    local rel = util.relative(e.file, root)
+    local tags = filters.classify(e.file, root, { read_header = false })
+    if tags.generated or tags.test or tags.excluded or rel:find("^docs?/") or rel:find("^examples?/") then
+      e.rank = 10 + (rank[e.lang] or 9)
+    else
+      e.rank = rank[e.lang] or 9
+    end
   end
   table.sort(out, function(a, b)
-    local ra, rb = rank[a.lang] or 9, rank[b.lang] or 9
+    local ra, rb = a.rank, b.rank
     if ra ~= rb then
       return ra < rb
     end

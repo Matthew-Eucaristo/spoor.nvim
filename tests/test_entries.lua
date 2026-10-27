@@ -33,6 +33,25 @@ T["go: main and http routes"] = function()
   end
 end
 
+T["helper scripts in docs/ and generated code rank last; group roots read as /"] = function()
+  local dir = repo(H.go)
+  vim.fn.mkdir(dir .. "/docs/gen", "p")
+  vim.fn.writefile(
+    { "def main():", "    pass", "", 'if __name__ == "__main__":', "    main()" },
+    dir .. "/docs/gen/build.py"
+  )
+  vim.fn.mkdir(dir .. "/api", "p")
+  vim.fn.writefile(
+    { "package api", "", "func Register(g *gin.RouterGroup) {", '\tg.POST("", createItem)', "}" },
+    dir .. "/api/routes.go"
+  )
+  vim.system({ "git", "add", "." }, { cwd = dir }):wait()
+  local n = names(require("spoor.entries").find(dir))
+  eq(n[1], "go main")
+  eq(n[#n], "py __main__")
+  expect.no_equality(vim.tbl_contains(n, "route POST /") or nil, nil)
+end
+
 T["next.js: pages, route handlers, scripts"] = function()
   local dir = repo(H.ts)
   local n = names(require("spoor.entries").find(dir))

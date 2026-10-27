@@ -139,4 +139,12 @@ T["render is pure and stable"] = function()
   eq(json.steps[2].note, "check")
 end
 
+T["a narrow trail window keeps the label and cuts old crumbs"] = function()
+  start()
+  local s = require("spoor.trace").state
+  local bar =
+    vim.api.nvim_eval_statusline(vim.wo[s.win.win].winbar, { winid = s.win.win, use_winbar = true, maxwidth = 16 })
+  eq(bar.str:sub(1, 13), " spoor trace ")
+end
+
 return T

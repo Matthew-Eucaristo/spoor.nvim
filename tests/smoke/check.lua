@@ -65,8 +65,9 @@ local ok, err = xpcall(function()
       fail("key " .. lhs .. " is not spoor's: " .. vim.inspect(m.desc))
     end
     for _, other in ipairs(all) do
-      local o = vim.keycode(other.lhs)
-      local overlap = o ~= raw and (o:sub(1, #raw) == raw or raw:sub(1, #o) == o)
+      -- which-key's own trigger maps are how it shows the popup, not competing keys
+      local o = other.desc == "which-key-trigger" and "" or vim.keycode(other.lhs)
+      local overlap = o ~= "" and o ~= raw and (o:sub(1, #raw) == raw or raw:sub(1, #o) == o)
       -- which-key groups are not keymaps, so any mapping that is a prefix of ours shadows it
       if overlap and #o < #raw then
         fail(("key %s is shadowed by %s (%s)"):format(lhs, other.lhs, other.desc or other.rhs or "?"))

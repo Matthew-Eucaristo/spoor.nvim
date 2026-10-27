@@ -172,6 +172,13 @@ function M.copy(text, what)
   M.notify(('Yanked %s as Mermaid into "" (no clipboard provider)'):format(what))
 end
 
+--- "1 file", "3 files"
+---@param n integer
+---@param word string
+function M.plural(n, word)
+  return ("%d %s%s"):format(n, word, n == 1 and "" or "s")
+end
+
 ---@param msg string
 ---@param level? integer
 function M.notify(msg, level)

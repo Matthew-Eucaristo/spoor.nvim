@@ -586,7 +586,11 @@ function M.open(opts)
     end
     Snacks.picker.pick({
       source = "spoor_changes",
-      title = ("Changed since %s · %d symbols · %d files"):format(label, #items, vim.tbl_count(files)),
+      title = ("Changed since %s · %s · %s"):format(
+        label,
+        util.plural(#items, "symbol"),
+        util.plural(vim.tbl_count(files), "file")
+      ),
       items = items,
       format = format,
       preview = preview,
