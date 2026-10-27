@@ -232,8 +232,16 @@ local function show(node)
   if not (win and vim.api.nvim_win_is_valid(win)) then
     return
   end
+  local path = vim.uri_to_fname(node.uri)
+  if not vim.uv.fs_stat(path) then
+    return util.notify(vim.fn.fnamemodify(path, ":~:.") .. " was moved or deleted", vim.log.levels.WARN)
+  end
   vim.api.nvim_win_call(win, function()
-    vim.lsp.util.show_document({ uri = node.uri, range = node.selection }, s.encoding or "utf-16", { focus = true })
+    local loc = { uri = node.uri, range = node.selection }
+    if not pcall(vim.lsp.util.show_document, loc, s.encoding or "utf-16", { focus = true }) then
+      -- the file is shorter than when the step was saved: land on its last line
+      pcall(vim.api.nvim_win_set_cursor, 0, { vim.api.nvim_buf_line_count(0), 0 })
+    end
     vim.cmd("normal! zz")
   end)
 end
@@ -430,9 +438,7 @@ function M.mermaid()
     return
   end
   local text = export.trail_mermaid(s.trail)
-  vim.fn.setreg("+", text)
-  vim.fn.setreg('"', text)
-  util.notify("Copied the trail as Mermaid")
+  util.copy(text, "the trail")
 end
 
 local actions = {

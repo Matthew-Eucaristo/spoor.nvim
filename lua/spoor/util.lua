@@ -161,6 +161,17 @@ function M.id(uri, pos)
   return ("%s#%d:%d"):format(uri, pos.line, pos.character)
 end
 
+--- Put text in the clipboard (and ""), or only in "" when there is no clipboard provider.
+---@param text string
+---@param what string e.g. "the bow-tie"
+function M.copy(text, what)
+  vim.fn.setreg('"', text)
+  if vim.fn.has("clipboard") == 1 and pcall(vim.fn.setreg, "+", text) then
+    return M.notify(("Copied %s as Mermaid"):format(what))
+  end
+  M.notify(('Yanked %s as Mermaid into "" (no clipboard provider)'):format(what))
+end
+
 ---@param msg string
 ---@param level? integer
 function M.notify(msg, level)

@@ -68,7 +68,12 @@ end
 
 function View:show()
   if not self:valid() then
+    -- with splitkeep=screen (LazyVim's default) a new bottom split would push the code
+    -- window's cursor off the line you are on; scroll the code instead
+    local keep = vim.o.splitkeep
+    vim.o.splitkeep = "cursor"
     self.win:show()
+    vim.o.splitkeep = keep
   end
   return self
 end
@@ -263,9 +268,7 @@ M.base_actions = {
   yank = function(v)
     if v.graph then
       local text = require("spoor.export").bowtie_mermaid(v.graph, { show_all = v.show_all })
-      vim.fn.setreg("+", text)
-      vim.fn.setreg('"', text)
-      require("spoor.util").notify("Copied the bow-tie as Mermaid")
+      require("spoor.util").copy(text, "the bow-tie")
     end
   end,
 }

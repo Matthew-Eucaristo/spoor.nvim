@@ -117,7 +117,10 @@ function H.fake_server(bufnr, spec)
         return closing
       end,
       terminate = function()
-        closing = true
+        if not closing then
+          closing = true
+          dispatchers.on_exit(0, 15)
+        end
       end,
     }
   end

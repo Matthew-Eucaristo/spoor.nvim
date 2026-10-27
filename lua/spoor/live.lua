@@ -219,7 +219,12 @@ function M.update()
   local tab = vim.api.nvim_get_current_tabpage()
   resolve.at_cursor(client, win, { group = M.group }, function(item)
     -- drop answers for an edited buffer, a closed window or a tab you have left
-    if tick ~= M.generation or not vim.api.nvim_win_is_valid(win) or vim.api.nvim_get_current_tabpage() ~= tab then
+    if
+      tick ~= M.generation
+      or not vim.api.nvim_win_is_valid(win)
+      or vim.api.nvim_win_get_buf(win) ~= bufnr
+      or vim.api.nvim_get_current_tabpage() ~= tab
+    then
       return
     end
     local v = M.panels[vim.api.nvim_get_current_tabpage()]

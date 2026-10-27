@@ -88,8 +88,10 @@ function M.parse_diff(lines)
       if p then
         cur.path = p
       end
+    elseif cur and l:find("^rename from ") then
+      cur.old_path = l:match("^rename from (.*)$")
     elseif cur and l:find("^%-%-%- ") and not cur.path then
-      cur.old_path = l:match("^%-%-%- a/(.*)$")
+      cur.old_path = cur.old_path or l:match("^%-%-%- a/(.-)\t?$")
     elseif cur and l:find("^@@") then
       local os_, oc, ns_, nc = l:match("^@@ %-(%d+),?(%d*) %+(%d+),?(%d*) @@")
       if os_ then
@@ -140,10 +142,17 @@ function M.diff(root, ref)
   end
   for _, f in ipairs(files) do
     f.abs = vim.fs.joinpath(top[1], f.path)
+  end
+  -- submodules show up as paths too; they have no symbols of their own here
+  files = vim.tbl_filter(function(f)
+    return vim.fn.isdirectory(f.abs) == 0
+  end, files)
+  for _, f in ipairs(files) do
     if not f.new then
       local old
       f.old_has = function(name)
-        old = old or table.concat(util.system({ "git", "show", ref .. ":" .. f.path }, top[1]) or {}, "\n")
+        local path = f.old_path or f.path -- renamed files: compare with the old name
+        old = old or table.concat(util.system({ "git", "show", ref .. ":" .. path }, top[1]) or {}, "\n")
         return old:find("%f[%w_]" .. vim.pesc(name) .. "%f[^%w_]") ~= nil
       end
     end

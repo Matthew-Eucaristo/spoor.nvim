@@ -102,4 +102,14 @@ T["H shows hidden nodes; y copies Mermaid"] = function()
   expect.no_equality(vim.fn.getreg('"'):find("^graph LR"), nil)
 end
 
+T["a late update after closing never moves the code cursor"] = function()
+  local v = open_float()
+  vim.bo[v.win.buf].bufhidden = "hide" -- LazyVim's snacks keeps the buffer after close
+  v:close()
+  local code = vim.api.nvim_get_current_win()
+  vim.api.nvim_win_set_cursor(code, { 1, 0 })
+  v:render(v.graph)
+  eq(vim.api.nvim_win_get_cursor(code), { 1, 0 })
+end
+
 return T

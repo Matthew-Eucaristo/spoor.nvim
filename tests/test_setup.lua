@@ -86,11 +86,20 @@ T["highlights link to the colorscheme and survive :colorscheme"] = function()
   eq(vim.api.nvim_get_hl(0, { name = "SpoorFocus" }).bold, true)
 end
 
-T["health check runs"] = function()
-  require("spoor").setup({})
+T["health check reports the code buffer's servers"] = function()
+  local bufnr = H.edit(H.go .. "/internal/order/order.go", 1, 0)
+  H.fake_server(bufnr, { handlers = {} })
+  require("spoor").setup({ live = { enabled = false } })
   vim.cmd("checkhealth spoor")
-  local out = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+  local health = vim.api.nvim_get_current_buf()
+  local out = ""
+  -- nightly fills the health buffer asynchronously
+  H.wait(function()
+    out = table.concat(vim.api.nvim_buf_get_lines(health, 0, -1, false), "\n")
+    return out:find("fake:", 1, true) ~= nil or out:find("No language server", 1, true) ~= nil
+  end, 3000, "health output")
   expect.no_equality(out:find("snacks.nvim found", 1, true), nil)
+  expect.no_equality(out:find("fake: ✓ prepareCallHierarchy", 1, true), nil)
   vim.cmd("bwipeout!")
 end
 
@@ -125,6 +134,24 @@ T["gag opens a focused float with deeper levels"] = function()
   eq(json.focus:find("^internal/order/order.go#") ~= nil, true)
   vim.api.nvim_feedkeys("q", "x", false)
   eq(v:valid(), false)
+end
+
+T["copy falls back to the unnamed register without a clipboard"] = function()
+  local util = require("spoor.util")
+  local msgs, has = {}, vim.fn.has
+  local orig = vim.notify
+  vim.notify = function(m)
+    msgs[#msgs + 1] = m
+  end
+  vim.fn.has = function(f)
+    return f == "clipboard" and 0 or has(f)
+  end
+  vim.fn.setreg('"', "")
+  local ok, err = pcall(util.copy, "graph LR", "the bow-tie")
+  vim.fn.has, vim.notify = has, orig
+  eq(ok, true, err)
+  eq(vim.fn.getreg('"'), "graph LR")
+  eq(msgs[1], 'Yanked the bow-tie as Mermaid into "" (no clipboard provider)')
 end
 
 return T
