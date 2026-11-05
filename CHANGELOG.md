@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Tree-sitter fallback: the name search for callers (`syntax · name search`) now stays inside the workspace of the language server attached to the buffer (a go-to-definition-only server, for example) instead of the whole git repository around it. With no server attached it still searches the git repository.
+
 ## 2.1.0 - 2026-10-28
 
 - Tree-sitter fallback: callers and references now come from the whole project, not just the file. With a server that has find-references (lua_ls), spoor asks it; otherwise it runs `git grep` for the name in files of the same language. Each use is grouped by the function around it and shown as a call or a reference, and the footer says where callers came from (`syntax · lua_ls references`, `syntax · name search`).

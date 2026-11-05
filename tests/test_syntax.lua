@@ -95,6 +95,15 @@ T["lua: inside a body the enclosing function is the focus; on a call, the callee
   eq(graph_here(), nil)
 end
 
+--- The graph at the cursor once callers from the rest of the project are in.
+local function project_graph()
+  local g = graph_here()
+  H.wait(function()
+    return g.status.incoming == "done" and g.reach ~= nil
+  end, 5000, "project callers")
+  return g
+end
+
 --- A server with go-to-definition but no call hierarchy (lua_ls), pointing `save` at `at`.
 local function definition_server(bufnr, at)
   return H.fake_server(bufnr, {
@@ -113,7 +122,9 @@ T["lua: on a call to another file's function, that function (through go-to-defin
   local bufnr = open("shop.lua", "return save(order)", "save")
   require("spoor.config").setup({})
   local server = definition_server(bufnr, { line = 7, character = 11 })
-  local g = graph_here()
+  -- the name search for other callers runs in the server's root, not the git repo around it
+  local g = project_graph()
+  eq(g.reach, "name search")
   eq(g.nodes[g.focus].name, "M.save")
   eq(g.nodes[g.focus].uri, vim.uri_from_fname(dir .. "/store.lua"))
   eq(g.scope, "store.lua")
@@ -203,15 +214,6 @@ T["a server without call hierarchy (marksman, ty) gets the syntax bow-tie"] = fu
     return v and v:valid() and v.graph and v.graph.source == "syntax"
   end, 3000, "syntax panel")
   eq(H.count(server.requests, "textDocument/prepareCallHierarchy"), 0) -- only for references
-end
-
---- The graph at the cursor once callers from the rest of the project are in.
-local function project_graph()
-  local g = graph_here()
-  H.wait(function()
-    return g.status.incoming == "done" and g.reach ~= nil
-  end, 5000, "project callers")
-  return g
 end
 
 T["lua: callers from other files through the server's find-references"] = function()
