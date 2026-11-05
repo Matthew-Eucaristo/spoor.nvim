@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spoor.nvim: who calls this, and what does it call? A call bow-tie for Neovim and LazyVim</title>
+<meta name="description" content="A Neovim plugin for reading code: callers on the left, the function in the middle, callees on the right, two levels deep. Trace mode keeps the path you walked with notes, and it flags functions your agent added that nothing calls. Language server and git, tree-sitter where there is no call hierarchy. No AI, no index, no network.">
+<meta name="theme-color" content="#0a0a0a">
+<meta name="color-scheme" content="dark light">
+<link rel="canonical" href="https://matthew-eucaristo.github.io/spoor.nvim/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="spoor.nvim">
+<meta property="og:title" content="spoor.nvim: follow the trail through a codebase in Neovim">
+<meta property="og:description" content="Callers | function | callees as a live bow-tie, trace mode with saved trails and notes, and the functions your agent added that nothing calls. Neovim 0.11+, LazyVim or plain.">
+<meta property="og:url" content="https://matthew-eucaristo.github.io/spoor.nvim/">
+<meta property="og:image" content="https://matthew-eucaristo.github.io/spoor.nvim/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="spoor's bow-tie for Process: handleOrders and TestProcess call it; it calls validate, applyDiscount, subtotal, Save with three implementations, and Emit">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "spoor.nvim",
+  "description": "Follow the trail through a codebase in Neovim: a live callers | function | callees bow-tie, trace mode with saved trails and notes, changed-symbols and entry-point pickers.",
+  "url": "https://matthew-eucaristo.github.io/spoor.nvim/",
+  "codeRepository": "https://github.com/Matthew-Eucaristo/spoor.nvim",
+  "programmingLanguage": "Lua",
+  "runtimePlatform": "Neovim 0.11+",
+  "license": "https://opensource.org/licenses/MIT"
+}
+</script>
+<script>document.documentElement.classList.add("js")</script>
+<script src="bowtie.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#explore">Skip to the explorer</a>
+
+<header class="bar">
+  <a class="mark" href="./" aria-label="spoor.nvim home"><svg viewBox="0 0 40 24" aria-hidden="true"><path d="M0 0 L20 9 L40 0 V24 L20 15 L0 24 Z"/></svg>spoor.nvim</a>
+  <nav aria-label="Sections">
+    <a href="#explore">Explorer</a>
+    <a href="#install">Install</a>
+    <a href="#keys">Keys</a>
+    <a href="#config">Config</a>
+    <a href="#changelog">Changelog</a>
+  </nav>
+  <a class="bar-gh" href="https://github.com/Matthew-Eucaristo/spoor.nvim">GitHub</a>
+</header>
+
+<main>
+<!-- ============ HERO ============ -->
+<section class="hero" aria-labelledby="title">
+  <div class="hero-card">
+    <div class="ties" aria-hidden="true"></div>
+    <div class="hero-text" data-reveal>
+      <h1 id="title">Follow the trail through a codebase</h1>
+      <p class="lead">A Neovim plugin that shows who calls the function under your cursor and what it calls, keeps the path you walked with your notes, and flags what your coding agent added that nothing calls yet.</p>
+      <p class="hero-act"><a class="btn" href="#install">Install with lazy.nvim</a></p>
+      <ul class="hero-links">
+        <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim">Source on GitHub</a></li>
+        <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/doc/spoor.txt"><code>:help spoor</code></a></li>
+        <li><a href="#changelog">What's new in <!--version-->v2.1.0<!--/version--></a></li>
+      </ul>
+    </div>
+  </div>
+  <figure class="hero-stage">
+    <div class="tie-big" aria-hidden="true"></div>
+    <div class="rec" data-ui>
+      <video id="demo-video" muted loop playsinline autoplay preload="metadata" width="1100" height="620" poster="stage-focus.webp" aria-label="spoor in LazyVim: K shows the bow-tie next to the hover, a rest shows the card, the bottom panel follows the cursor, gag opens the full bow-tie with previews, gat traces Process into Save with a note, and the changed-symbols picker flags loyaltyBonus with 0 callers">
+        <source src="demo.mp4" type="video/mp4">
+      </video>
+      <noscript><img src="demo.gif" alt="spoor in LazyVim, the recording from the README" width="1100" height="620"></noscript>
+      <button class="rec-toggle" type="button" id="rec-toggle" aria-pressed="false">Pause</button>
+    </div>
+    <figcaption>The README recording: LazyVim with gopls on a small Go shop repo. One minute, no cuts.</figcaption>
+  </figure>
+</section>
+
+<!-- ============ EXPLORER ============ -->
+<section class="explore" id="explore" aria-labelledby="explore-h">
+  <div class="explore-head" data-reveal>
+    <h2 id="explore-h">Who calls <span id="focus-name">Process</span>?</h2>
+    <p>This is spoor's own <code>render.lua</code> output for the demo's shop repo, laid out from gopls's call hierarchy when this page was built. Click a function to re-root the bow-tie on it, the way <kbd>.</kbd> does in the float.</p>
+    <ul class="keys-hint" aria-label="Keys inside the bow-tie">
+      <li><kbd>h</kbd><kbd>j</kbd><kbd>k</kbd><kbd>l</kbd> move</li>
+      <li><kbd>.</kbd> re-root</li>
+      <li><kbd>&lt;BS&gt;</kbd> back</li>
+      <li><kbd>y</kbd> copy as Mermaid</li>
+    </ul>
+    <div class="explore-actions">
+      <button type="button" class="btn btn-ink" id="bt-back" disabled>Back</button>
+      <button type="button" class="btn btn-ink" id="bt-copy">Copy Mermaid</button>
+      <span class="status" id="bt-status" role="status" aria-live="polite"></span>
+    </div>
+  </div>
+  <div class="explore-ui" data-ui data-reveal>
+    <div class="float" id="bt" tabindex="0" role="application" aria-label="Bow-tie explorer. Arrow keys or h j k l move, period re-roots, Backspace goes back, y copies Mermaid." aria-describedby="bt-live">
+      <p class="float-title"><samp><span class="t-h">spoor</span> <span class="t-f">· <span id="bt-title">Process</span></span></samp></p>
+      <div class="float-body"><div class="cursorline" id="bt-cursor" hidden></div><pre id="bt-pre"><!--bowtie--> CALLERS 2                     CALLEES 5
+ ƒ handleOrders  ──┬─▶ ƒ Process ──┬─▶ ƒ validate
+ ƒ TestProcess   ──╯               ╰─▶ ƒ Save ◇3<!--/bowtie--></pre></div>
+      <p class="float-foot"><samp id="bt-legend"> static calls only · gopls · ◇ interface (impls) · ~ used as a value </samp></p>
+    </div>
+    <div class="code" id="bt-code" aria-live="polite">
+      <p class="code-path"><samp id="code-path">internal/order/order.go:25</samp></p>
+      <pre id="code-pre">// Process validates, prices and stores an order, then announces it.
+func Process(ctx context.Context, repo Repo, o Order, discount int) error {</pre>
+    </div>
+    <p class="sr-only" id="bt-live" aria-live="polite"></p>
+  </div>
+</section>
+
+<!-- ============ METHOD (stages) ============ -->
+<section class="method" id="method" aria-labelledby="method-h">
+  <h2 class="sr-only" id="method-h">How you read code with spoor</h2>
+  <div class="stages" id="stages">
+    <div class="stage is-on" data-stage="0">
+      <div class="stage-words">
+        <h3><span class="ord">First,</span> pick a focus</h3>
+        <p>Press <kbd>K</kbd> on a function: your usual hover, plus the full bow-tie next to it, two levels and every row. Move on and it goes. Rest the cursor for five seconds and a small card shows the same at a glance.</p>
+      </div>
+      <figure class="stage-pic"><img src="stage-focus.webp" width="1100" height="620" alt="K on Process: the hover below, and above it the bow-tie with handleOrders and TestProcess calling in and validate, applyDiscount, subtotal, roundCents, Save ◇3 and Emit going out" loading="lazy"></figure>
+    </div>
+    <div class="stage" data-stage="1">
+      <div class="stage-words">
+        <h3><span class="ord">Then</span> look at its neighbours</h3>
+        <p><kbd>gag</kbd> opens the bow-tie two levels deep. Moving through it shows each function's code above; <kbd>&lt;CR&gt;</kbd> goes there and <kbd>&lt;Esc&gt;</kbd> puts you back. <kbd>&lt;C-v&gt;</kbd>, <kbd>&lt;C-s&gt;</kbd> or <kbd>&lt;C-t&gt;</kbd> keep it open beside the code.</p>
+      </div>
+      <figure class="stage-pic"><img src="stage-neighbours.webp" width="1100" height="620" alt="The gag float at the bottom of the screen with Save ◇3 selected, and the Repo interface's Save method previewed in the code window above" loading="lazy"></figure>
+    </div>
+    <div class="stage" data-stage="2">
+      <div class="stage-words">
+        <h3><span class="ord">Next,</span> follow one path</h3>
+        <p><kbd>gat</kbd> walks one hop at a time while the code opens beside you. Numbered next hops; on an interface you pick the implementation, and the test double is marked as one.</p>
+      </div>
+      <figure class="stage-pic"><img src="stage-follow.webp" width="1100" height="620" alt="Trace mode on Process: next hops numbered 1 to 5, and a picker titled Save has 3 implementations listing memory.go, postgres.go and the test's fake" loading="lazy"></figure>
+    </div>
+    <div class="stage" data-stage="3">
+      <div class="stage-words">
+        <h3><span class="ord">Last,</span> write down what you learn</h3>
+        <p><kbd>n</kbd> adds a note to a step. The trail is saved as you go: resume it tomorrow with <kbd>&lt;leader&gt;ct</kbd>, send it to quickfix with <kbd>&lt;C-q&gt;</kbd>, or copy it as Mermaid with <kbd>m</kbd>.</p>
+      </div>
+      <figure class="stage-pic"><img src="stage-note.webp" width="1100" height="620" alt="A note being written on the Save step of the trail Process to Save: rounding happens before Save?" loading="lazy"></figure>
+    </div>
+  </div>
+  <div class="stage-ctl">
+    <label for="stage-range" class="sr-only">Stage</label>
+    <div class="range"><input type="range" id="stage-range" min="0" max="3" step="1" value="0" aria-valuetext="Pick a focus"></div>
+    <ol class="stage-names" aria-hidden="true">
+      <li class="is-on">Focus</li><li>Neighbours</li><li>Path</li><li>Notes</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============ BOARD (features) ============ -->
+<section class="board-wrap" aria-labelledby="board-h">
+  <div class="board">
+    <div class="tile t-head" data-reveal>
+      <h2 id="board-h">Labels that tell the truth</h2>
+      <p>Static analysis can't see every edge. spoor says which ones it saw, and how.</p>
+    </div>
+    <figure class="tile t-changes t-pic" data-reveal>
+      <img src="changes.webp" width="1100" height="620" alt="Changed since main, 3 symbols in 3 files: roundCents new with 1 caller, loyaltyBonus new with a warning and 0 callers, Process changed by one line" loading="lazy">
+      <figcaption><b>What did the agent change?</b> <kbd>&lt;leader&gt;cG</kbd> lists the functions touched since the branch point. A new one nothing calls is flagged.</figcaption>
+    </figure>
+    <div class="tile t-impl" data-reveal>
+      <p class="big" data-ui aria-hidden="true"><samp>Save <span class="c-type">◇3</span></samp></p>
+      <p class="cap"><b>Interfaces</b> A call through an interface with three implementations. <kbd>gat</kbd> asks which one.</p>
+    </div>
+    <div class="tile t-value" data-reveal>
+      <p class="big" data-ui aria-hidden="true"><samp><span class="c-special">~</span> New</samp></p>
+      <p class="cap"><b>Passed as a value</b> <code>HandleFunc("/orders", s.handleOrders)</code> registers, it doesn't call.</p>
+    </div>
+    <div class="tile t-fw" data-reveal>
+      <p class="big small-big" data-ui aria-hidden="true"><samp><span class="c-info">⚑&#xFE0E;</span> net/http · handler (router calls this)</samp></p> <!-- taste-skill-ignore: spoor's literal label -->
+      <p class="cap"><b>Framework roots</b> Go, Next.js, React, Flutter, Python and JVM rules name who calls it.</p>
+    </div>
+    <figure class="tile t-card t-pic" data-reveal>
+      <img src="card.webp" width="1100" height="620" alt="The card: a small bow-tie above the cursor line, with gopls · gag for more in its footer" loading="lazy">
+      <figcaption><b>Out of the way</b> Nothing shows while you move. Rest five seconds and the card appears; <kbd>&lt;leader&gt;uB</kbd> keeps a panel at the bottom instead.</figcaption>
+    </figure>
+    <div class="tile t-syntax" data-reveal>
+      <p class="big small-big" data-ui aria-hidden="true"><samp>syntax · name search</samp></p>
+      <p class="cap"><b>Any language</b> No call hierarchy (marksman, ty, no server)? A tree-sitter bow-tie, labelled as one.</p>
+    </div>
+    <div class="tile t-warn" data-reveal>
+      <p class="big small-big" data-ui aria-hidden="true"><samp><span class="c-warn">⚠&#xFE0E; no static callers</span></samp></p> <!-- taste-skill-ignore: spoor's literal label -->
+      <p class="cap"><b>Never an empty column</b> Framework or dynamic entry? It says so, and lists value uses.</p>
+    </div>
+    <div class="tile t-jsx" data-reveal>
+      <p class="big" data-ui aria-hidden="true"><samp><span class="c-special">&lt;/&gt;</span></samp></p>
+      <p class="cap"><b>JSX</b> Components rendered, not called.</p>
+    </div>
+    <div class="tile t-entries" data-reveal>
+      <p class="big small-big" data-ui aria-hidden="true"><kbd>␣</kbd><kbd>c</kbd><kbd>e</kbd></p>
+      <p class="cap"><b>Entry points</b> <kbd>&lt;leader&gt;ce</kbd> finds <code>main</code>, HTTP routes, Next.js pages, <code>runApp</code>, package scripts. Picking one starts a trace.</p>
+    </div>
+    <div class="tile t-hidden" data-reveal>
+      <p class="big small-big" data-ui aria-hidden="true"><samp>CALLEES 0 <span class="c-dim">+1 external hidden</span></samp></p>
+      <p class="cap"><b>Less noise</b> Vendor code, SDKs, <code>node_modules</code> and generated files are hidden but counted. <kbd>H</kbd> shows them.</p>
+    </div>
+  </div>
+</section>
+
+<div class="tie-band" aria-hidden="true"></div>
+
+<!-- ============ INSTALL ============ -->
+<section class="install" id="install" aria-labelledby="install-h">
+  <div class="install-words" data-reveal>
+    <h2 id="install-h">Install it in one file</h2>
+    <p>Restart Neovim and lazy.nvim installs spoor and snacks.nvim, which spoor's own <code>lazy.lua</code> declares. Open a code file and rest the cursor on a function. <code>:checkhealth spoor</code> shows what your language servers support.</p>
+    <h3>You need</h3>
+    <ul class="ties-list">
+      <li>Neovim 0.11 or newer, and git.</li>
+      <li>For the full, cross-file picture, a language server with call hierarchy: gopls, vtsls, tsgo, dartls, pyright, jdtls, clangd or rust-analyzer. Without one, tree-sitter gives a same-file view.</li>
+      <li>Optionally <a href="https://github.com/folke/snacks.nvim">snacks.nvim</a> (LazyVim ships it) for picker previews. Without it spoor uses plain windows and <code>vim.ui.select</code>.</li>
+      <li>macOS, Linux or Windows: CI tests all three.</li>
+    </ul>
+  </div>
+  <div class="install-code" data-reveal>
+    <div class="tabs" role="tablist" aria-label="Install with">
+      <button type="button" role="tab" id="tab-lazy" aria-controls="pane-lazy" aria-selected="true">LazyVim / lazy.nvim</button>
+      <button type="button" role="tab" id="tab-pack" aria-controls="pane-pack" aria-selected="false" tabindex="-1">vim.pack</button>
+      <button type="button" role="tab" id="tab-other" aria-controls="pane-other" aria-selected="false" tabindex="-1">Anything else</button>
+    </div>
+    <div class="pane" role="tabpanel" id="pane-lazy" aria-labelledby="tab-lazy">
+      <p class="pane-file">~/.config/nvim/lua/plugins/spoor.lua</p>
+      <pre><code id="code-lazy">return {
+  "Matthew-Eucaristo/spoor.nvim",
+  version = "*", -- follow releases; drop this line to track main
+  event = "VeryLazy",
+  opts = {},
+}</code></pre>
+      <button type="button" class="copy" data-copy="code-lazy">Copy</button>
+    </div>
+    <div class="pane" role="tabpanel" id="pane-pack" aria-labelledby="tab-pack">
+      <p class="pane-file">Neovim 0.12's built-in vim.pack, in init.lua</p>
+      <pre><code id="code-pack">vim.pack.add({
+  "https://github.com/folke/snacks.nvim", -- optional: picker previews
+  "https://github.com/Matthew-Eucaristo/spoor.nvim",
+})
+require("spoor").setup()</code></pre>
+      <button type="button" class="copy" data-copy="code-pack">Copy</button>
+    </div>
+    <div class="pane" role="tabpanel" id="pane-other" aria-labelledby="tab-other">
+      <p class="pane-file">Any plugin manager, or none</p>
+      <pre><code id="code-other">git clone https://github.com/Matthew-Eucaristo/spoor.nvim \
+  ~/.local/share/nvim/site/pack/plugins/start/spoor.nvim
+nvim -c "helptags ALL" -c "qa"
+# then, in init.lua: require("spoor").setup()</code></pre>
+      <button type="button" class="copy" data-copy="code-other">Copy</button>
+      <p class="pane-note">Without <code>setup()</code> only the <code>:Spoor</code> command exists: no keys, no <kbd>K</kbd> bow-tie, no card, no panel.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ KEYS ============ -->
+<section class="keys" id="keys" aria-labelledby="keys-h">
+  <h2 id="keys-h" data-reveal>Keys that LazyVim leaves free</h2>
+  <div class="keys-grid">
+    <figure class="keys-pic" data-reveal>
+      <img src="pinned.webp" width="1100" height="620" alt="The bow-tie kept open in a vertical split beside repo.go after pressing Ctrl-v in the float" loading="lazy">
+      <figcaption>Every key was checked against LazyVim 16, its language extras and the fzf and telescope pickers. <kbd>gag</kbd> and <kbd>gat</kbd> join <kbd>gai</kbd>/<kbd>gao</kbd> in the <kbd>ga</kbd> calls group.</figcaption>
+    </figure>
+    <div class="keys-tables" data-reveal>
+      <table>
+        <caption>Anywhere</caption>
+        <tbody>
+          <tr><th scope="row"><kbd>K</kbd></th><td>Your usual hover, plus the full bow-tie next to it</td></tr>
+          <tr><th scope="row"><kbd>&lt;leader&gt;uB</kbd></th><td>Turn the bottom panel on or off; the choice is remembered</td></tr>
+          <tr><th scope="row"><kbd>gag</kbd></th><td>Open the bow-tie float at the cursor, two levels deep</td></tr>
+          <tr><th scope="row"><kbd>gat</kbd></th><td>Start a trace at the cursor</td></tr>
+          <tr><th scope="row"><kbd>&lt;leader&gt;ct</kbd></th><td>Resume the last trail in this project</td></tr>
+          <tr><th scope="row"><kbd>&lt;leader&gt;cT</kbd></th><td>Pick a trail (<kbd>&lt;c-x&gt;</kbd> deletes one)</td></tr>
+          <tr><th scope="row"><kbd>&lt;leader&gt;ce</kbd></th><td>Open the entry-points picker</td></tr>
+          <tr><th scope="row"><kbd>&lt;leader&gt;cG</kbd></th><td>Changed symbols since the branch point</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <caption>In the bow-tie: the float, a pinned split or the panel</caption>
+        <tbody>
+          <tr><th scope="row"><kbd>&lt;CR&gt;</kbd></th><td>Go to the node (the float closes; a pinned split stays)</td></tr>
+          <tr><th scope="row"><kbd>h</kbd> <kbd>l</kbd></th><td>Move to the callers or the callees column</td></tr>
+          <tr><th scope="row"><kbd>&lt;Tab&gt;</kbd></th><td>Open one more level from the node, or fold it again</td></tr>
+          <tr><th scope="row"><kbd>.</kbd> <kbd>&lt;BS&gt;</kbd></th><td>Re-root on the node, or go back</td></tr>
+          <tr><th scope="row"><kbd>&lt;C-v&gt;</kbd> <kbd>&lt;C-s&gt;</kbd> <kbd>&lt;C-t&gt;</kbd></th><td>Keep the float open in a vertical split, a bottom split or a tab</td></tr>
+          <tr><th scope="row"><kbd>t</kbd></th><td>Start a trace at the node</td></tr>
+          <tr><th scope="row"><kbd>H</kbd></th><td>Show or hide external, generated and test code</td></tr>
+          <tr><th scope="row"><kbd>R</kbd></th><td>Retry, or find callers where the card and panel skip them</td></tr>
+          <tr><th scope="row"><kbd>y</kbd></th><td>Copy the bow-tie as Mermaid</td></tr>
+          <tr><th scope="row"><kbd>q</kbd> <kbd>g?</kbd></th><td>Close; show help</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <caption>In trace mode</caption>
+        <tbody>
+          <tr><th scope="row"><kbd>1</kbd>–<kbd>9</kbd> <kbd>&lt;CR&gt;</kbd></th><td>Take that hop; on an interface, pick the implementation</td></tr>
+          <tr><th scope="row"><kbd>&lt;BS&gt;</kbd></th><td>Step back</td></tr>
+          <tr><th scope="row"><kbd>n</kbd></th><td>Add a note to the step under the cursor</td></tr>
+          <tr><th scope="row"><kbd>i</kbd></th><td>Switch next hops between callees and callers</td></tr>
+          <tr><th scope="row"><kbd>&lt;C-q&gt;</kbd> <kbd>m</kbd></th><td>Send the trail to quickfix, or copy it as Mermaid</td></tr>
+          <tr><th scope="row"><kbd>q</kbd></th><td>Close (the trail is already saved)</td></tr>
+        </tbody>
+      </table>
+      <p class="cmds"><code>:Spoor bowtie | trace | resume | trails | entries | changes [ref] | live [on|off] | graph | trail</code></p>
+      <p class="keys-note">Change or drop any global key: <code>opts = { keys = { changes = "&lt;leader&gt;gC", trace = false } }</code>, or <code>keys = false</code> for none.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONFIG ============ -->
+<section class="config" id="config" aria-labelledby="config-h">
+  <div class="config-panel">
+    <div class="config-words" data-reveal>
+      <h2 id="config-h">Defaults from config.lua</h2>
+      <p>Pass only what you want to change in <code>opts</code>. This block is cut from <code>lua/spoor/config.lua</code> each time the page is built.</p>
+      <h3>Measured, not guessed</h3>
+      <p>Requests are debounced (120 ms), cancelled when the cursor moves on, cached until you edit, never sent in insert mode, and capped at 1.5 s, with 15 s while a server is still indexing. dartls searches the whole workspace for callers (14–21 s on a large Flutter app), so its card and panel find callers when you press <kbd>R</kbd>.</p>
+      <h3>Your colours</h3>
+      <p>Highlight groups such as <code>SpoorFocus</code>, <code>SpoorInterface</code> and <code>SpoorWarn</code> link to standard groups, so spoor follows your colorscheme. Your own frameworks and entry points go in <code>frameworks</code> and <code>entries</code>.</p>
+      <p><a class="btn" href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/doc/spoor.txt">Read <code>:help spoor-config</code></a></p>
+    </div>
+    <div class="config-code" data-reveal>
+      <pre><code id="code-config"><!--config-->{ ... }<!--/config--></code></pre>
+      <button type="button" class="copy" data-copy="code-config">Copy</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY ============ -->
+<section class="why" id="why" aria-labelledby="why-h">
+  <div class="why-panel">
+    <div class="why-left" data-reveal>
+      <h2 id="why-h">One flow in view, not a hairball</h2>
+      <figure class="why-pic">
+        <img src="panel.webp" width="1100" height="620" alt="The bottom panel under the code: callers handleOrders and TestProcess, Process in the middle, six callees on the right" loading="lazy">
+      </figure>
+    </div>
+    <div class="why-right" data-reveal>
+      <div>
+        <h3>Why a bow-tie</h3>
+        <p>Field studies put about 58% of developer time into comprehension (<a href="https://research.monash.edu/en/publications/measuring-program-comprehension-a-large-scale-field-study-with-pr/">Xia et al. 2018</a>). Developers who succeed investigate methodically and write down what they find (<a href="https://doi.org/10.1109/TSE.2004.101">Robillard et al. 2004</a>). Focus-seeded, depth-limited views you build up yourself have better support than whole-repo graphs (<a href="https://doi.org/10.1145/1181775.1181777">Kersten &amp; Murphy 2006</a>, <a href="https://doi.org/10.1145/1787234.1787250">DeLine et al. 2010</a>).</p>
+      </div>
+      <div>
+        <h3>Next to what Neovim has</h3>
+        <p>Neovim's <code>vim.lsp.buf.incoming_calls()</code> and <code>outgoing_calls()</code> answer one side, one hop at a time, in a quickfix list. spoor asks for both sides, two levels deep, labels interfaces, values and frameworks, and keeps the path you took with your notes.</p>
+      </div>
+      <div>
+        <h3>What it never does</h3>
+        <p>No AI, no index to build, no network requests, no background processes. It runs short read-only <code>git</code> commands and writes only to <code>stdpath("state")/spoor/</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="faq" id="faq" aria-labelledby="faq-h">
+  <h2 id="faq-h" data-reveal>Questions people ask</h2>
+  <div class="drawer">
+    <details name="faq" open class="card c1">
+      <summary><span class="tab">No server</span><span class="q">What if my language server has no call hierarchy?</span></summary>
+      <div class="a"><p>spoor reads the buffer's tree-sitter tree instead, finding functions and calls by node type name, so any language with a parser works without per-language queries. Callers come from the server's find-references when it has one (lua_ls does), otherwise a <code>git grep</code> for the name. The footer says which: <em>syntax · lua_ls references</em>, <em>syntax · name search</em>, or <em>syntax only · this file</em>. A server that can answer always wins.</p></div>
+    </details>
+    <details name="faq" class="card c2">
+      <summary><span class="tab">LazyVim</span><span class="q">Do I need LazyVim or snacks.nvim?</span></summary>
+      <div class="a"><p>No. spoor works in plain Neovim and in LazyVim alike. With snacks.nvim, pickers show a preview and get snacks' help and toggles; without it, spoor uses plain windows and <code>vim.ui.select</code>, so whatever picker you registered for that is used. Icons come from mini.icons when it is installed, with plain fallbacks.</p></div>
+    </details>
+    <details name="faq" class="card c3">
+      <summary><span class="tab">Speed</span><span class="q">Will it slow down typing?</span></summary>
+      <div class="a"><p>Three requests per bow-tie (prepare, incoming, outgoing) plus implementation lookups for interface calls, debounced, cancelled when you move on and never sent in insert mode. Rendering a 60-node bow-tie takes about 0.15 ms, so the latency is the server's. On the real projects measured in the README, gopls and tsgo answered every request within 12 ms (warm, p95).</p></div>
+    </details>
+    <details name="faq" class="card c1">
+      <summary><span class="tab">Files</span><span class="q">What does it write, and how do I remove it?</span></summary>
+      <div class="a"><p>Only <code>stdpath("state")/spoor/</code>: <code>state.json</code> (whether the panel is on) and <code>trails/</code>, one file of trails and notes per project. To uninstall with lazy.nvim, delete <code>lua/plugins/spoor.lua</code>, run <code>:Lazy clean</code> and delete that folder.</p></div>
+    </details>
+    <details name="faq" class="card c2">
+      <summary><span class="tab">Homebrew</span><span class="q">Why isn't there a Homebrew formula?</span></summary>
+      <div class="a"><p>Your plugin manager installs a plugin, updates it, pins it in <code>lazy-lock.json</code> and loads it lazily. A formula would be a second update channel LazyVim can't see, and lazy.nvim resets the runtimepath, so a plugin under Homebrew's <code>share/nvim/site</code> would not even load.</p></div>
+    </details>
+    <details name="faq" class="card c3">
+      <summary><span class="tab">Building on it</span><span class="q">Can another plugin read the bow-tie?</span></summary>
+      <div class="a"><p><code>require("spoor").current_graph()</code> and <code>current_trail()</code> return plain data with project-relative paths, and <code>User SpoorTrail</code> fires each time a trail is saved. <code>:Spoor graph</code> and <code>:Spoor trail</code> print them as JSON.</p></div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ CHANGELOG ============ -->
+<section class="changelog" id="changelog" aria-labelledby="changelog-h">
+  <div class="rel-head" data-reveal>
+    <h2 id="changelog-h">Released so far</h2>
+    <p>Semver tags; <code>version = "*"</code> follows them. Each release's first change below, the rest in <a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</p>
+  </div>
+  <ol class="rel" data-reveal>
+<!--changelog--><li><a class="rel-v" href="https://github.com/Matthew-Eucaristo/spoor.nvim/releases">Releases</a></li><!--/changelog-->
+  </ol>
+</section>
+</main>
+
+<footer class="foot">
+  <a class="foot-mark" href="#title" aria-label="spoor.nvim, back to top">
+    <span>s</span><span>p</span><span>o</span><span>o</span><span>r</span>
+  </a>
+  <div class="foot-links">
+    <ul>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim">Source</a></li>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/releases">Releases</a></li>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/CHANGELOG.md">Changelog</a></li>
+    </ul>
+    <ul>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/doc/spoor.txt"><code>:help spoor</code></a></li>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim#readme">README</a></li>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/CONTRIBUTING.md">Contributing</a></li>
+    </ul>
+    <ul>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/issues">Issues</a></li>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/SECURITY.md">Security</a></li>
+      <li><a href="https://github.com/Matthew-Eucaristo/spoor.nvim/blob/main/LICENSE">MIT licence</a></li>
+    </ul>
+  </div>
+  <p class="foot-line"><span>A <em>spoor</em> is an animal's trail.</span> <span>spoor.nvim <!--version-->v2.1.0<!--/version--> · MIT · by Matthew-Eucaristo</span></p>
+</footer>
+</body>
+</html>
