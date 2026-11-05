@@ -4,6 +4,8 @@ Follow the trail through a codebase without leaving Neovim. spoor shows who call
 
 ![spoor: K shows the bow-tie next to the hover, a rest shows the card, <leader>uB the bottom panel, then the deeper float, a trace with a note, and the changed-symbols picker](demo/demo.gif)
 
+**Website:** [matthew-eucaristo.github.io/spoor.nvim](https://matthew-eucaristo.github.io/spoor.nvim/), with a bow-tie you can click through, rendered by spoor from gopls on the demo repo.
+
 A *spoor* is an animal's trail. Experienced programmers read unfamiliar code the same way: pick a focus, look at its neighbours, follow one path, and write down what they learn. The slow part is not following calls but losing the trail. spoor makes that cheap:
 
 - **Live bow-tie.** Callers on the left, the function in the middle, callees on the right. Nothing gets in the way while you move. Press `K` and the full bow-tie (two levels, every row) appears next to the hover; move on and it goes. Rest the cursor on a function for 5 seconds and a small card shows the same at a glance. `<leader>uB` keeps a panel at the bottom instead. `gag` opens the full bow-tie two levels deep: moving through it shows each function's code above, `<CR>` goes there and `<Esc>` puts you back. `<C-v>`, `<C-s>` or `<C-t>` keep it open in a split or a tab of its own.

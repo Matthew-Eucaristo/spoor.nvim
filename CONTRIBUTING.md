@@ -34,6 +34,10 @@ Tests run headless with [mini.test](https://github.com/nvim-mini/mini.nvim). LSP
 - No real paths, usernames or project names in code, tests, fixtures, docs or the demo. The fixtures under `tests/fixtures` are synthetic.
 - Pull requests are squash-merged, so the PR title becomes the commit. Use a conventional prefix: `feat:`, `fix:`, `docs:`, `test:`, `ci:` or `chore:`.
 
+## Website
+
+`site/` is the GitHub Pages site: plain HTML, CSS and JS, no third-party requests. Preview it with `site/build.sh /tmp/site/spoor.nvim && python3 -m http.server -d /tmp/site 8000`, then open http://localhost:8000/spoor.nvim/. The build needs nvim and gopls: `site/bowtie.lua` renders the page's bow-tie explorer with spoor itself on `tests/fixtures/go`. It cuts the defaults from `lua/spoor/config.lua` and the release notes from `CHANGELOG.md`, and uses ffmpeg for the recording and its stills when it is installed. It deploys from `main` through `.github/workflows/pages.yml`.
+
 ## Recording the demo
 
 `vhs demo/demo.tape` re-records `demo/demo.gif` from the repository root. The tape runs `demo/run.sh` (a throwaway LazyVim on the synthetic shop repo from `demo/setup.sh`) under a temporary `HOME` (`demo/vhs-env.sh`), so no frame shows anything about your machine. It needs [VHS](https://github.com/charmbracelet/vhs), gopls and JetBrainsMono Nerd Font (`brew install --cask font-jetbrains-mono-nerd-font`). Check every frame before committing a new GIF, and keep it under about 2 MB.
