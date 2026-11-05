@@ -234,7 +234,8 @@ and calls are found by node type name ("function", "method", "lambda", "call",
 queries. Callees are the calls inside the function; those defined elsewhere
 are dimmed and jump to the call site. Callers come from the whole project: the
 server's find-references when it has one (lua_ls does), else `git grep` for
-the name in files of the same language, skipping comments, strings and files
+the name in files of the same language (inside the attached server's
+workspace, else the git repository), skipping comments, strings and files
 with their own function of that name. Each use is grouped by the function
 around it, as a call or a reference. On a call to a function in another file,
 the server's go-to-definition leads to that file. The footer says where

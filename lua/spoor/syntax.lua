@@ -9,6 +9,19 @@ local util = require("spoor.util")
 
 local M = {}
 
+--- The project a buffer belongs to: the workspace of a language server attached to it (the
+--- tree that server answers for), else the git repository around the file.
+---@param buf integer
+---@return string
+local function project_root(buf)
+  for _, c in ipairs(vim.lsp.get_clients({ bufnr = buf })) do
+    if c.root_dir or (c.workspace_folders and c.workspace_folders[1]) then
+      return util.root(buf, c)
+    end
+  end
+  return util.root(buf)
+end
+
 -- Node type names, matched as Lua patterns against each grammar's named node types.
 M.def_words = { "function", "method", "constructor", "lambda", "closure", "^func_", "procedure", "subroutine" }
 M.call_words = { "call", "invocation" }
@@ -352,7 +365,7 @@ end
 ---@return spoor.Graph
 local function build(idx, def)
   local buf, uri = idx.src, idx.uri
-  local root = idx.project or util.root(buf --[[@as integer]])
+  local root = idx.project or project_root(buf --[[@as integer]])
   local focus = def_node(def, uri)
   local g = model.graph(focus, { root = root })
   g.source, g.encoding, g.complete = "syntax", "utf-8", true
@@ -572,7 +585,7 @@ local function at(src, pos, o, cb)
       if not uri then
         return fallback()
       end
-      at_file(uri, dpos, encoding, { exact = true, project = idx.project or util.root(src) }, function(g)
+      at_file(uri, dpos, encoding, { exact = true, project = idx.project or project_root(src) }, function(g)
         if not g then
           return fallback()
         end
@@ -769,7 +782,7 @@ function M.project(g, buf)
     require("spoor.view").refresh(g)
   end
   local function by_name()
-    local root = g.root or util.root(buf)
+    local root = g.root or project_root(buf)
     grep(root, path, key_of(focus.name) or focus.name, function(hits)
       done(hits, "name search", true)
     end)
